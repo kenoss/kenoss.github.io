@@ -1,0 +1,3 @@
+#! /usr/bin/env bash
+
+docker run -u "$(id -u):$(id -g)" -v $PWD:/app --workdir /app ${ZOLA_DOCKER_IMAGE} build
