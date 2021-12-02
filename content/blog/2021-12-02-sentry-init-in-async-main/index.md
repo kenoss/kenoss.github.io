@@ -33,7 +33,7 @@ fn main() {
 
 便利なのでよく web サーバーのエラーを把握したりするために使われたりします.
 
-さて, 上記の `sentry::capture_message()` のところではエラーメッセージ以外の情報を渡していません.
+さて, 上記の `sentry::capture_message()` や `panic!()` のところではエラーメッセージ以外の情報を渡していません.
 エラーを送信するには DSN やらクライアントを使うはずです.
 
 裏側を覗く前に登場人物を紹介しておきましょう.
@@ -88,13 +88,15 @@ pub fn capture_event(event: Event<'static>) -> Uuid {
 
 というように, `sentry::capture_event()` をユーザーが手放しで呼び出せるのは sentry が裏側で **スレッドに紐づく `Hub`** を経由して色々やりくりしてくれているからというのがわかりますね.
 
+特に panic するときは普通は明示的に何かを渡すことはできませんから, こういう仕組みになっているのも納得できます.
+
 ## 問題設定
 
 さて, ようやく本題です.
 
 Q. 以下のプログラムは意図したとおりに動くでしょうか?
 
-```
+```rust
 #[tokio::main]
 async fn main() {
     let _guard = sentry::init(sentry::ClientOptions::default());
@@ -274,7 +276,7 @@ async fn main() -> anyhow::Result<()> {
 ここで塩をひとつまみ.
 最初に謎の assert を入れてみます.
 
-```
+```console
 $  SENTRY_DSN=<dsn> cargo run
     Finished dev [unoptimized + debuginfo] target(s) in 6.88s
      Running `target/debug/example-sentry-init-in-async-main`
@@ -299,7 +301,7 @@ https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L142
 ```
 
 
-`Hub::main()` は単に `Hub` を参照しているだけのように見えます. 何で `Hub::main()` の呼び出しなしでは上手くいき, 呼び出しを足すと意図しない状況が発生したのでしょうか?
+`Hub::main()` は単に `Hub` を参照しているだけのように見えます. なんで `Hub::main()` の呼び出しなしでは上手くいき, 呼び出しを足すと意図しない状況が発生したのでしょうか?
 
 これを理解するためには, `Hub` がいつどのように初期化されるのかを知る必要があります.
 
