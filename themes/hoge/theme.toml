@@ -1,0 +1,12 @@
+name = "hoge"
+description = "hoge"
+license = "MIT"
+homepage = "https://github.com/kenoss/hoge"
+min_version = "0.0.1"
+demo = "https://kenoss.github.io/"
+
+[extra]
+
+[author]
+name = "keno"
+homepage = "https://kenoss.github.io/"

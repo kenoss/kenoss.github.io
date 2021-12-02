@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        <title>{% block title %}{{ config.extra.site_name }}{% endblock title %}</title>
+
+        <link rel="stylesheet" href="{{ get_url(path="theme.css", trailing_slash=false) | safe }}">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="{{ config.base_url }}" class="header-logo">{{ config.extra.site_name }}</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                {% block main %}
+                {% endblock main %}
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        {{ config.extra.copyright }}
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>
