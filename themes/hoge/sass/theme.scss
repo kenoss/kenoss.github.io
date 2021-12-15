@@ -1,25 +1,29 @@
 @import "colors";
 
+$content_width: 950px;
 $padding: 10px;
 
 body {
     background: $bg_black;
     color: $fg_white;
+    font-size: 16px;
 }
 
-body {
-    display: grid;
-    grid-template-columns: auto;
-    grid-template-areas:
-        "header"
-        "main"
-        "footer";
+.content {
+    margin: 0;
+}
+
+.content {
+    width: $content_width;
+}
+@media screen and (max-width:$content_width) {
+    .content {
+        width: 100%;
+    }
 }
 
 header {
     padding: $padding $padding 0 $padding;
-
-    grid-area: header;
 
     display: flex;
     justify-content: space-between;
@@ -35,27 +39,50 @@ header {
 
 main {
     padding: $padding;
-    grid-area: main;
-}
 
-p {
-    text-align: justify;
+    word-break: break-word;
+    word-wrap: break-word;
+
+    .headline {
+        margin: 2em 0;
+    }
+
+    h2, h3 {
+        margin: 2em 0 0 0;
+    }
+
+    p {
+        line-height: 1.9;
+
+        code {
+            padding: 0.2em;
+            border: 1px solid rgba(256, 256, 256,.08);
+
+            color: $fg_isolated_code;
+        }
+    }
+
+    pre {
+        margin: 2em 0;
+        padding: 1.5em;
+
+        display: flex;
+        overflow-x: auto;
+    }
+
+    a {
+        color: $fg_link;
+    }
 }
 
 footer {
-    color: $fg_light_gray;
     padding: 0 $padding $padding $padding;
 
-    grid-area: footer;
+    color: $fg_light_gray;
 }
 
 .footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-
-.content {
-    margin: 0 auto;
-    width: 950px;
 }
