@@ -55,13 +55,6 @@ main {
 
     p {
         line-height: 1.9;
-
-        code {
-            padding: 0.2em;
-            border: 1px solid rgba(256, 256, 256,.08);
-
-            color: $fg-isolated-code;
-        }
     }
 
     pre {
