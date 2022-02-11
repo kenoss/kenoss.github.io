@@ -2,6 +2,7 @@
 
 $content_width: 950px;
 $padding: 10px;
+$padding-half: 5px;
 
 body {
     background: $bg_black;
@@ -41,6 +42,11 @@ main {
 
     .headline {
         margin: 2em 0;
+    }
+
+    h1 {
+        background: $bg_darkgreen;
+        padding: $padding $padding-half;
     }
 
     h2, h3 {
