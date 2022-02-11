@@ -11,13 +11,9 @@ body {
 
 .content {
     margin: auto;
-}
 
-.content {
     width: $content_width;
-}
-@media screen and (max-width:$content_width) {
-    .content {
+    @media screen and (max-width:$content_width) {
         width: 100%;
     }
 }
