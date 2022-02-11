@@ -1,20 +1,20 @@
 @import "colors";
 
-$content_width: 950px;
+$content-width: 950px;
 $padding: 10px;
 $padding-half: 5px;
 
 body {
-    background: $bg_black;
-    color: $fg_white;
+    background: $bg-black;
+    color: $fg-white;
     font-size: 16px;
 }
 
 .content {
     margin: auto;
 
-    width: $content_width;
-    @media screen and (max-width:$content_width) {
+    width: $content-width;
+    @media screen and (max-width:$content-width) {
         width: 100%;
     }
 }
@@ -31,7 +31,7 @@ header {
     font-size: 26px;
     font-weight: bold;
     text-decoration: none;
-    color: $fg_logo;
+    color: $fg-logo;
 }
 
 main {
@@ -45,7 +45,7 @@ main {
     }
 
     h1 {
-        background: $bg_darkgreen;
+        background: $bg-darkgreen;
         padding: $padding $padding-half;
     }
 
@@ -60,7 +60,7 @@ main {
             padding: 0.2em;
             border: 1px solid rgba(256, 256, 256,.08);
 
-            color: $fg_isolated_code;
+            color: $fg-isolated-code;
         }
     }
 
@@ -73,14 +73,14 @@ main {
     }
 
     a {
-        color: $fg_link;
+        color: $fg-link;
     }
 }
 
 footer {
     padding: 0 $padding $padding $padding;
 
-    color: $fg_light_gray;
+    color: $fg-light-gray;
 }
 
 .footer {
