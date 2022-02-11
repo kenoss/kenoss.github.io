@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ config.extra.site_name }}
+{% endblock title %}
+
+{% block main %}
+<div class="headline" itemprop="headline">
+    <h1>{{ section.title }}</h1>
+</div>
+<ul>
+    {% for page in section.pages %}
+        <li><a href="{{ page.permalink | safe}}">{{ page.title }}</a></li>
+    {% endfor %}
+</ul>
+{% endblock main %}

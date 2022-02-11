@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ config.extra.site_name }}
+{% endblock title %}
+
+{% block main %}
+{% set index = get_section(path="_index.md") %}
+<div class="headline" itemprop="headline">
+    <h1>{{ index.title }}</h1>
+</div>
+<ul>
+    {% for section in index.subsections %}
+        {% set section = get_section(path=section) %}
+        <li><a href="{{ section.permalink | safe}}">{{ section.title }}</a></li>
+        {% if section.pages %}
+            <ul>
+                {% for page in section.pages %}
+                    <li><a href="{{ page.permalink | safe}}">{{ page.title }}</a></li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endfor %}
+</ul>
+{% endblock main %}
