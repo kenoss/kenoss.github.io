@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://kenoss.github.io/</loc>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/blog/</loc>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/blog/2021-12-01-first-post/</loc>
+        <lastmod>2021-12-01</lastmod>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/blog/2021-12-02-sentry-init-in-async-main/</loc>
+        <lastmod>2021-12-02</lastmod>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/blog/2023-12-22-join-handle-can-be-dropped/</loc>
+        <lastmod>2023-12-22</lastmod>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/tags/</loc>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/tags/poem/</loc>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/tags/rust/</loc>
+    </url>
+    <url>
+        <loc>https://kenoss.github.io/tags/tech/</loc>
+    </url>
+</urlset>
