@@ -1,3 +1,4 @@
 /public/
 # Rust
 target/
+!templates/tags/

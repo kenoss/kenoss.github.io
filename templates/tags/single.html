@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block main %}
+  <div>
+    <a href="{{ config.base_url | safe }}/tags">Show all tags</a>
+
+    <h1>Tag: #{{ term.name }}</h1>
+
+   <div>{{ term.pages | length }} items found</div>
+
+    <ul>
+      {% for page in term.pages %}
+        <li>
+          <a href="{{ page.permalink | safe }}">
+            {{ page.date | date(format="%Y-%m-%d") }} {{ page.title }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endblock main %}
