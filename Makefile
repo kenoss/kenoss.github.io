@@ -1,5 +1,5 @@
-export ZOLA_VERSION := 0.14.0
-export ZOLA_DOCKER_IMAGE := balthek/zola:$(ZOLA_VERSION)
+export ZOLA_VERSION := v0.17.2
+export ZOLA_DOCKER_IMAGE := ghcr.io/getzola/zola:$(ZOLA_VERSION)
 
 .PHONY: all
 all: build

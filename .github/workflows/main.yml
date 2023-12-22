@@ -5,24 +5,23 @@ jobs:
     if: github.ref != 'refs/heads/main'
     steps:
       - name: 'checkout'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: 'build'
-        uses: shalzz/zola-deploy-action@v0.13.0
+        uses: shalzz/zola-deploy-action@v0.17.2-1
         env:
-          PAGES_BRANCH: gh-pages
           BUILD_DIR: .
-          TOKEN: ${{ secrets._GITHUB_TOKEN }}
-          # BUILD_ONLY: true
+          BUILD_ONLY: true
+          BUILD_FLAGS: --drafts
   build_and_deploy:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
       - name: 'checkout'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: 'build and deploy'
-        uses: shalzz/zola-deploy-action@v0.13.0
+        uses: shalzz/zola-deploy-action@v0.17.2-1
         env:
-          PAGES_BRANCH: gh-pages
           BUILD_DIR: .
-          TOKEN: ${{ secrets._GITHUB_TOKEN }}
+          PAGES_BRANCH: gh-pages
+          GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
           REPOSITORY: kenoss/kenoss.github.io
