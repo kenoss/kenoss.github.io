@@ -1,0 +1,79 @@
+{
+  "version": 3,
+  "skipped": 1,
+  "num_failures_by_type": {
+    "SKIP": 1,
+    "PASS": 1,
+    "FAIL": 1,
+    "CRASH": 1,
+    "TIMEOUT": 0
+  },
+  "tests": {
+    "virtual": {
+      "hoge": {
+        "http": {
+          "tests": {
+            "protocol": {
+              "domain0": {
+                "test0.js": {
+                  "expected": "PASS",
+                  "actual": "SKIP",
+                  "other": null
+                },
+                "test1.js": {
+                  "expected": "CRASH",
+                  "actual": "CRASH",
+                  "other": null,
+                  "crash_site": "hoge.cc(42)",
+                  "artifacts": {
+                    "command": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain0/test1-command.txt"
+                    ],
+                    "stderr": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain0/test1-stderr.txt"
+                    ],
+                    "carsh_log": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain0/test1-crash-log.txt"
+                    ]
+                  }
+                }
+              },
+              "domain1": {
+                "test0.js": {
+                  "expected": "PASS",
+                  "actual": "FAIL",
+                  "artifacts": {
+                    "command": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain1/test0-command.txt"
+                    ],
+                    "stderr": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain1/test0-stderr.txt"
+                    ],
+                    "actual_text": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain1/test0-actual.txt"
+                    ],
+                    "expected_text": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain1/test0-expected.txt"
+                    ],
+                    "text_diff": [
+                      "test-output-dir/virtual/hoge/tests/protocol/domain1/test0-diff.txt"
+                    ]
+                  }
+                }
+              }
+            },
+            "other": {
+              "test0.js": {
+                "expected": "PASS",
+                "actual": "PASS"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "num_passes": 1,
+  "num_flaky": 0,
+  "num_regressions": 0
+}
