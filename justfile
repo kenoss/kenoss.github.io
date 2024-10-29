@@ -1,4 +1,4 @@
-ZOLA_VERSION := "0.17.2"
+ZOLA_VERSION := "0.19.2"
 
 check-version:
   [ "$(zola --version)" == "zola {{ZOLA_VERSION}}" ] || (zola --version; false)
