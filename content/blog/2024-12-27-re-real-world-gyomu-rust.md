@@ -9,7 +9,7 @@ slug = "2024-12-27-re-real-world-gyomu-rust"
 ## これは何?
 
 [RealWorld 業務 Rust](https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94)
-に乗っかって普段から考えているなんやかんやを参照可能しておく. 主に情報の補足と極論の補正 [^1].
+に乗っかって普段から考えているなんやかんやを参照可能にしておく. 主に情報の補足と極論の補正 [^1].
 但し業務というコンテキストは外してだいたいいつでも適用できるようにする.
 
 legokichi さんの考えには少なからず影響されていることに注意.
@@ -59,7 +59,7 @@ export CARGO_TARGET_DIR=target/check-strict RUSTFLAGS='-D warnings'; cargo build
 安定期に入るとそこまで長いエラーが出なくなって, `cargo watch` で `clear` と `tmux` 上連打で十分になってしまった.
 (`head` だと肝心の部分が途切れたりして二度手間.)
 
-## [rust-analyzer は頼りにならない](https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#rust-analyzer-%E3%81%AF%E9%A0%BC%E3%82%8A%E3%81%AB%E3%81%AA%E3%82%89%E3%81%AA%E3%81%84)
+## Re: [rust-analyzer は頼りにならない](https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#rust-analyzer-%E3%81%AF%E9%A0%BC%E3%82%8A%E3%81%AB%E3%81%AA%E3%82%89%E3%81%AA%E3%81%84)
 
 前述の通り `cargo watch` を使っている.
 `alacritty/tmux (git 操作とか手動でテストとか)`, `emacs`, `alacritty/tmux (cargo watch とか)` と並べている.
