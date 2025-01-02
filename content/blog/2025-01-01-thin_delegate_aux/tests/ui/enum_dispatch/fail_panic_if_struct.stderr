@@ -1,0 +1,7 @@
+error: custom attribute panicked
+  --> tests/ui/enum_dispatch/fail_panic_if_struct.rs:11:1
+   |
+11 | #[enum_dispatch::enum_dispatch(ShapeI)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: message: called `Result::unwrap()` on an `Err` value: ()

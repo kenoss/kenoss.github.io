@@ -1,0 +1,672 @@
+#[auto_delegate::delegate]
+pub trait Hello {
+    fn hello(&self) -> String;
+}
+
+impl Hello for String {
+    fn hello(&self) -> String {
+        format!("hello, {self}")
+    }
+}
+
+#[derive(auto_delegate::Delegate)]
+struct Hoge(#[to(Hello)] String);
+
+fn main() {}
+
+// The result of `cargo expand`:
+//
+// #![feature(prelude_import)]
+// #[prelude_import]
+// use std::prelude::rust_2021::*;
+// #[macro_use]
+// extern crate std;
+// pub trait Hello {
+//     fn hello(&self) -> String;
+// }
+// impl<DelegateImpl> Hello for DelegateImpl
+// where
+//     DelegateImpl: auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::A: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::B: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::C: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::D: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::D: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::E: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::F: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::G: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::H: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::I: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::J: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::K: Hello,
+//     <DelegateImpl as auto_delegate::Delegatable<
+//         'h',
+//         'e',
+//         'l',
+//         'l',
+//         'o',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//         ' ',
+//     >>::L: Hello,
+// {
+//     #[inline(always)]
+//     fn hello(&self) -> String {
+//         let m = self.delegate_by_ref();
+//         if let Some(t) = m.0 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.1 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.2 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.3 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.4 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.5 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.6 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.7 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.8 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.9 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.10 {
+//             return t.hello();
+//         }
+//         if let Some(t) = m.11 {
+//             return t.hello();
+//         }
+//         {
+//             ::core::panicking::panic_fmt(format_args!("unreachable"));
+//         };
+//     }
+// }
+// impl Hello for String {
+//     fn hello(&self) -> String {
+//         {
+//             let res = ::alloc::fmt::format(format_args!("hello, {0}", self));
+//             res
+//         }
+//     }
+// }
+// struct Hoge(#[to(Hello)] String);
+// impl auto_delegate::Delegatable<
+//     'h',
+//     'e',
+//     'l',
+//     'l',
+//     'o',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+//     ' ',
+// > for Hoge {
+//     type A = String;
+//     type B = String;
+//     type C = String;
+//     type D = String;
+//     type E = String;
+//     type F = String;
+//     type G = String;
+//     type H = String;
+//     type I = String;
+//     type J = String;
+//     type K = String;
+//     type L = String;
+//     #[inline(always)]
+//     fn delegate_by_owned(
+//         self,
+//     ) -> auto_delegate::Delegates<
+//         Self::A,
+//         Self::B,
+//         Self::C,
+//         Self::D,
+//         Self::E,
+//         Self::F,
+//         Self::G,
+//         Self::H,
+//         Self::I,
+//         Self::J,
+//         Self::K,
+//         Self::L,
+//     > {
+//         auto_delegate::Delegates(
+//             Some(self.0),
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//         )
+//     }
+//     #[inline(always)]
+//     fn delegate_by_ref(
+//         &self,
+//     ) -> auto_delegate::Delegates<
+//         &Self::A,
+//         &Self::B,
+//         &Self::C,
+//         &Self::D,
+//         &Self::E,
+//         &Self::F,
+//         &Self::G,
+//         &Self::H,
+//         &Self::I,
+//         &Self::J,
+//         &Self::K,
+//         &Self::L,
+//     > {
+//         auto_delegate::Delegates(
+//             Some(&self.0),
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//         )
+//     }
+//     #[inline(always)]
+//     fn delegate_by_mut(
+//         &mut self,
+//     ) -> auto_delegate::Delegates<
+//         &mut Self::A,
+//         &mut Self::B,
+//         &mut Self::C,
+//         &mut Self::D,
+//         &mut Self::E,
+//         &mut Self::F,
+//         &mut Self::G,
+//         &mut Self::H,
+//         &mut Self::I,
+//         &mut Self::J,
+//         &mut Self::K,
+//         &mut Self::L,
+//     > {
+//         auto_delegate::Delegates(
+//             Some(&mut self.0),
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//             None,
+//         )
+//     }
+// }
+// fn main() {}

@@ -1,0 +1,42 @@
+error[E0046]: not all trait items implemented, missing: `NAME`
+ --> tests/ui/auto-delegate/fail_not_supported_associated_const.rs:1:1
+  |
+1 | #[auto_delegate::delegate]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `NAME` in implementation
+...
+4 |     const NAME: &'static str;
+  |     ------------------------ `NAME` from trait
+  |
+  = note: this error originates in the attribute macro `auto_delegate::delegate` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `area` found for enum `Shape` in the current scope
+  --> tests/ui/auto-delegate/fail_not_supported_associated_const.rs:47:22
+   |
+11 | enum Shape {
+   | ---------- method `area` not found for this enum
+...
+47 |     assert_eq!(shape.area(), 6);
+   |                      ^^^^ method not found in `Shape`
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+note: `ShapeI` defines an item `area`, perhaps you need to implement it
+  --> tests/ui/auto-delegate/fail_not_supported_associated_const.rs:2:1
+   |
+2  | trait ShapeI {
+   | ^^^^^^^^^^^^
+
+error[E0599]: no method named `area` found for enum `Shape` in the current scope
+  --> tests/ui/auto-delegate/fail_not_supported_associated_const.rs:51:22
+   |
+11 | enum Shape {
+   | ---------- method `area` not found for this enum
+...
+51 |     assert_eq!(shape.area(), 12.56);
+   |                      ^^^^ method not found in `Shape`
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+note: `ShapeI` defines an item `area`, perhaps you need to implement it
+  --> tests/ui/auto-delegate/fail_not_supported_associated_const.rs:2:1
+   |
+2  | trait ShapeI {
+   | ^^^^^^^^^^^^

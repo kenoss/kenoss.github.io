@@ -1,0 +1,10 @@
+error[E0119]: conflicting implementations of trait `ShapeI` for type `b::Shape`
+  --> tests/ui/enum_dispatch/fail_def_in_other_mod_with_arg.rs:28:5
+   |
+28 |     #[enum_dispatch::enum_dispatch(ShapeI)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |     |
+   |     first implementation here
+   |     conflicting implementation for `b::Shape`
+   |
+   = note: this error originates in the attribute macro `enum_dispatch::enum_dispatch` (in Nightly builds, run with -Z macro-backtrace for more info)

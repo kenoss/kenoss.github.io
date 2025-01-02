@@ -1,0 +1,20 @@
+error[E0599]: no method named `area` found for enum `Shape` in the current scope
+  --> tests/ui/enum_dispatch/fail_implicit_error_if_typo.rs:27:22
+   |
+13 | enum Shape {
+   | ---------- method `area` not found for this enum
+...
+27 |     assert_eq!(shape.area(), 6);
+   |                      ^^^^ method not found in `Shape`
+   |
+note: the method `area` exists on the type `Rect`
+  --> tests/ui/enum_dispatch/fail_implicit_error_if_typo.rs:3:5
+   |
+3  |     fn area(&self) -> usize;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: items from traits can only be used if the trait is implemented and in scope
+note: `ShapeI` defines an item `area`, perhaps you need to implement it
+  --> tests/ui/enum_dispatch/fail_implicit_error_if_typo.rs:2:1
+   |
+2  | trait ShapeI {
+   | ^^^^^^^^^^^^

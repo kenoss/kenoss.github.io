@@ -1,0 +1,23 @@
+error[E0277]: `T` doesn't implement `std::fmt::Display`
+  --> tests/ui/ambassador/fail_generics.rs:2:7
+   |
+2  | trait Shout<T>
+   |       ^^^^^ `T` cannot be formatted with the default formatter
+...
+23 | #[derive(ambassador::Delegate)]
+   |          -------------------- in this derive macro expansion
+   |
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+note: required by a bound in `Shout`
+  --> tests/ui/ambassador/fail_generics.rs:4:8
+   |
+2  | trait Shout<T>
+   |       ----- required by a bound in this trait
+3  | where
+4  |     T: std::fmt::Display,
+   |        ^^^^^^^^^^^^^^^^^ required by this bound in `Shout`
+   = note: this error originates in the macro `ambassador_impl_Shout` which comes from the expansion of the derive macro `ambassador::Delegate` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T`
+   |
+2  | trait Shout<T: std::fmt::Display>
+   |              +++++++++++++++++++

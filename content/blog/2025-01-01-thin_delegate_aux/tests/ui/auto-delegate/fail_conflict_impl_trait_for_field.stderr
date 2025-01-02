@@ -1,0 +1,11 @@
+error[E0119]: conflicting implementations of trait `Hello` for type `String`
+ --> tests/ui/auto-delegate/fail_conflict_impl_trait_for_field.rs:1:1
+  |
+1 | #[auto_delegate::delegate]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `String`
+...
+6 | impl Hello for String {
+  | --------------------- first implementation here
+  |
+  = note: upstream crates may add a new impl of trait `auto_delegate::Delegatable<'h', 'e', 'l', 'l', 'o'>` for type `std::string::String` in future versions
+  = note: this error originates in the attribute macro `auto_delegate::delegate` (in Nightly builds, run with -Z macro-backtrace for more info)
