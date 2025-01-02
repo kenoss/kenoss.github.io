@@ -172,6 +172,12 @@ thin_delegate には便利な機能がいくつかありますが, 主要なも�
 
 基本的な使い方は [ドキュメント](https://docs.rs/thin_delegate/latest/thin_delegate/) を読んでください.
 
+関連する RFC として
+[rfcs#1406](https://github.com/rust-lang/rfcs/pull/1406),
+[rfcs#2393](https://github.com/rust-lang/rfcs/pull/2393),
+[rfcs#3530](https://github.com/rust-lang/rfcs/pull/3530)
+があります.
+
 ### Real world example: sabiniwm
 
 実際の使い方として sabiniwm (commit [1904a51](https://github.com/kenoss/sabiniwm/tree/ed5d2c9)) を見てみます.
