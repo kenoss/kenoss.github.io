@@ -6,6 +6,8 @@
 
         <title>{% block title %}{{ config.extra.site_name }}{% endblock title %}</title>
 
+        {% block ogp %}{% endblock ogp %}
+
         <link rel="stylesheet" href="{{ get_url(path="theme.css", trailing_slash=false) | safe }}">
     </head>
     <body>

@@ -4,6 +4,13 @@
 {{ page.title }} | {{ config.extra.site_name }}
 {% endblock title %}
 
+{% block ogp %}
+<meta property="og:site_name" content="{{ config.extra.site_name }}" />
+<meta property="og:title" content="{{ page.title }}" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="{{ config.base_url }}{{ page.path }}" />
+{% endblock ogp %}
+
 {% block main %}
 <article itemscope itemtype="http://schema.org/BlogPosting">
     <div class="headline" itemprop="headline">
