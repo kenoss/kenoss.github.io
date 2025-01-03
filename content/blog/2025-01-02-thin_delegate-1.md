@@ -6,6 +6,11 @@ slug = "2025-01-02-thin_delegate-1"
 "tags" = ["rust", "tech", "thin_delegate"]
 +++
 
+- [1章: `thin_delegate` の紹介](../2025-01-02-thin_delegate-1)
+- [2章: proc macro 間での情報伝達と delegation crate 比較](../2025-01-03-thin_delegate-2)
+- [3章: `thin_delegate` の設計と実装](../2025-01-04-thin_delegate-3)
+- [4章: まとめ](../2025-01-05-thin_delegate-4)
+
 ## crate `thin_delegate` を書いた
 
 [`thin_delegate`](https://github.com/kenoss/thin_delegate) という crate を書きました.
@@ -367,7 +372,7 @@ where
 - 解法: `thin_delegate` という crate を書いたのでそれが使える
 - 既に `sabiniwm` で色々な使い方をしている
 
-2章からは内部実装の話になります.
+[2章](../2025-01-03-thin_delegate-2) からは内部実装の話になります.
 
 
 [^101]: 正確には trait function/associated function である. <https://doc.rust-lang.org/reference/items/traits.html>
