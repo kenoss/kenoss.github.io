@@ -2,19 +2,19 @@ use enum_delegate_v020 as enum_delegate;
 
 mod external {
     pub trait ShapeI {
-        fn area(&self) -> usize;
+        fn area(&self) -> f64;
     }
 }
 
 struct Rect {
-    width: usize,
-    height: usize,
+    width: f64,
+    height: f64,
 }
 
 #[enum_delegate::implement(
     external::ShapeI,
     trait ShapeI {
-        fn area(&self) -> usize;
+        fn area(&self) -> f64;
     }
 )]
 enum Shape {
@@ -22,7 +22,7 @@ enum Shape {
 }
 
 impl external::ShapeI for Rect {
-    fn area(&self) -> usize {
+    fn area(&self) -> f64 {
         self.width * self.height
     }
 }
@@ -30,8 +30,8 @@ impl external::ShapeI for Rect {
 fn main() {
     use external::ShapeI;
 
-    let rect = Rect { width: 2, height: 3 };
-    assert_eq!(rect.area(), 6);
+    let rect = Rect { width: 2.0, height: 3.0 };
+    assert_eq!(rect.area(), 6.0);
     let shape = Shape::Rect(rect);
-    assert_eq!(shape.area(), 6);
+    assert_eq!(shape.area(), 6.0);
 }

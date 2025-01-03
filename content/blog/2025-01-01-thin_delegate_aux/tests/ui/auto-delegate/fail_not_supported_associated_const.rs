@@ -14,12 +14,12 @@ enum Shape {
 }
 
 struct Rect {
-    width: usize,
-    height: usize,
+    width: f64,
+    height: f64,
 }
 
 impl ShapeI for Rect {
-    type Output = usize;
+    type Output = f64;
     const NAME: &'static str = "Rect";
 
     fn area(&self) -> Self::Output {
@@ -40,16 +40,7 @@ impl ShapeI for Circle {
     }
 }
 
-fn main() {
-    let rect = Rect { width: 2, height: 3 };
-    assert_eq!(rect.area(), 6);
-    let shape = Shape::Rect(rect);
-    assert_eq!(shape.area(), 6);
-    let circle = Circle { radius: 2.0 };
-    assert_eq!(circle.area(), 12.56);
-    let shape = Shape::Circle(circle);
-    assert_eq!(shape.area(), 12.56);
-}
+fn main() {}
 
 // The result of `cargo expand`:
 //
@@ -797,11 +788,11 @@ fn main() {
 //     }
 // }
 // struct Rect {
-//     width: usize,
-//     height: usize,
+//     width: f64,
+//     height: f64,
 // }
 // impl ShapeI for Rect {
-//     type Output = usize;
+//     type Output = f64;
 //     const NAME: &'static str = "Rect";
 //     fn area(&self) -> Self::Output {
 //         self.width * self.height
@@ -817,61 +808,4 @@ fn main() {
 //         3.14 * self.radius * self.radius
 //     }
 // }
-// fn main() {
-//     let rect = Rect { width: 2, height: 3 };
-//     match (&rect.area(), &6) {
-//         (left_val, right_val) => {
-//             if !(*left_val == *right_val) {
-//                 let kind = ::core::panicking::AssertKind::Eq;
-//                 ::core::panicking::assert_failed(
-//                     kind,
-//                     &*left_val,
-//                     &*right_val,
-//                     ::core::option::Option::None,
-//                 );
-//             }
-//         }
-//     };
-//     let shape = Shape::Rect(rect);
-//     match (&shape.area(), &6) {
-//         (left_val, right_val) => {
-//             if !(*left_val == *right_val) {
-//                 let kind = ::core::panicking::AssertKind::Eq;
-//                 ::core::panicking::assert_failed(
-//                     kind,
-//                     &*left_val,
-//                     &*right_val,
-//                     ::core::option::Option::None,
-//                 );
-//             }
-//         }
-//     };
-//     let circle = Circle { radius: 2.0 };
-//     match (&circle.area(), &12.56) {
-//         (left_val, right_val) => {
-//             if !(*left_val == *right_val) {
-//                 let kind = ::core::panicking::AssertKind::Eq;
-//                 ::core::panicking::assert_failed(
-//                     kind,
-//                     &*left_val,
-//                     &*right_val,
-//                     ::core::option::Option::None,
-//                 );
-//             }
-//         }
-//     };
-//     let shape = Shape::Circle(circle);
-//     match (&shape.area(), &12.56) {
-//         (left_val, right_val) => {
-//             if !(*left_val == *right_val) {
-//                 let kind = ::core::panicking::AssertKind::Eq;
-//                 ::core::panicking::assert_failed(
-//                     kind,
-//                     &*left_val,
-//                     &*right_val,
-//                     ::core::option::Option::None,
-//                 );
-//             }
-//         }
-//     };
-// }
+// fn main() {}

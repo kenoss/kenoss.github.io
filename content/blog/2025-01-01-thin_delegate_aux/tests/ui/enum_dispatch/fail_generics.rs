@@ -8,26 +8,21 @@ enum Shape<T> {
     Rect(Rect<T>),
 }
 
-#[enum_dispatch::enum_dispatch(Shape<usize>)]
+#[enum_dispatch::enum_dispatch(Shape<f64>)]
 trait ShapeI {
-    fn area(&self) -> usize;
+    fn area(&self) -> f64;
 }
 
 impl<T> ShapeI for Rect<T>
 where
     T: std::ops::Mul,
 {
-    fn area(&self) -> usize {
-        (self.width * self.height) as usize
+    fn area(&self) -> f64 {
+        (self.width * self.height) as f64
     }
 }
 
-fn main() {
-    let rect = Rect { width: 2, height: 3 };
-    assert_eq!(rect.area(), 6);
-    let shape = Shape::Rect(rect);
-    assert_eq!(shape.area(), 6);
-}
+fn main() {}
 
 // The result of `cargo expand`:
 //
@@ -44,7 +39,7 @@ fn main() {
 //     Rect(Rect<T>),
 // }
 // trait ShapeI {
-//     fn area(&self) -> usize;
+//     fn area(&self) -> f64;
 // }
 // impl<T> ::core::convert::From<Rect<T>> for Shape<T> {
 //     fn from(v: Rect<T>) -> Shape<T> {
@@ -66,7 +61,7 @@ fn main() {
 // }
 // impl<T> ShapeI for Shape<T> {
 //     #[inline]
-//     fn area(&self) -> usize {
+//     fn area(&self) -> f64 {
 //         match self {
 //             Shape::Rect(inner) => ShapeI::area(inner),
 //         }
@@ -76,37 +71,8 @@ fn main() {
 // where
 //     T: std::ops::Mul,
 // {
-//     fn area(&self) -> usize {
-//         (self.width * self.height) as usize
+//     fn area(&self) -> f64 {
+//         (self.width * self.height) as f64
 //     }
 // }
-// fn main() {
-//     let rect = Rect { width: 2, height: 3 };
-//     match (&rect.area(), &6) {
-//         (left_val, right_val) => {
-//             if !(*left_val == *right_val) {
-//                 let kind = ::core::panicking::AssertKind::Eq;
-//                 ::core::panicking::assert_failed(
-//                     kind,
-//                     &*left_val,
-//                     &*right_val,
-//                     ::core::option::Option::None,
-//                 );
-//             }
-//         }
-//     };
-//     let shape = Shape::Rect(rect);
-//     match (&shape.area(), &6) {
-//         (left_val, right_val) => {
-//             if !(*left_val == *right_val) {
-//                 let kind = ::core::panicking::AssertKind::Eq;
-//                 ::core::panicking::assert_failed(
-//                     kind,
-//                     &*left_val,
-//                     &*right_val,
-//                     ::core::option::Option::None,
-//                 );
-//             }
-//         }
-//     };
-// }
+// fn main() {}

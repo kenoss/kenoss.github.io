@@ -1,7 +1,7 @@
 pub mod a {
     pub struct Rect {
-        width: usize,
-        height: usize,
+        width: f64,
+        height: f64,
     }
 
     #[enum_dispatch::enum_dispatch]
@@ -11,11 +11,11 @@ pub mod a {
 
     #[enum_dispatch::enum_dispatch(Shape)]
     pub trait ShapeI {
-        fn area(&self) -> usize;
+        fn area(&self) -> f64;
     }
 
     impl ShapeI for Rect {
-        fn area(&self) -> usize {
+        fn area(&self) -> f64 {
             self.width * self.height
         }
     }
@@ -42,14 +42,14 @@ fn main() {}
 // extern crate std;
 // pub mod a {
 //     pub struct Rect {
-//         width: usize,
-//         height: usize,
+//         width: f64,
+//         height: f64,
 //     }
 //     pub enum Shape {
 //         Rect(Rect),
 //     }
 //     pub trait ShapeI {
-//         fn area(&self) -> usize;
+//         fn area(&self) -> f64;
 //     }
 //     impl ::core::convert::From<Rect> for Shape {
 //         fn from(v: Rect) -> Shape {
@@ -71,14 +71,14 @@ fn main() {}
 //     }
 //     impl ShapeI for Shape {
 //         #[inline]
-//         fn area(&self) -> usize {
+//         fn area(&self) -> f64 {
 //             match self {
 //                 Shape::Rect(inner) => ShapeI::area(inner),
 //             }
 //         }
 //     }
 //     impl ShapeI for Rect {
-//         fn area(&self) -> usize {
+//         fn area(&self) -> f64 {
 //             self.width * self.height
 //         }
 //     }
@@ -90,7 +90,7 @@ fn main() {}
 //     }
 //     impl ShapeI for Shape {
 //         #[inline]
-//         fn area(&self) -> usize {
+//         fn area(&self) -> f64 {
 //             match self {
 //                 Shape::Rect(inner) => ShapeI::area(inner),
 //             }
@@ -98,7 +98,7 @@ fn main() {}
 //     }
 //     impl ShapeI for Shape {
 //         #[inline]
-//         fn area(&self) -> usize {
+//         fn area(&self) -> f64 {
 //             match self {
 //                 Shape::Rect(inner) => ShapeI::area(inner),
 //             }

@@ -15,12 +15,12 @@ enum Shape {
 }
 
 struct Rect {
-    width: usize,
-    height: usize,
+    width: f64,
+    height: f64,
 }
 
 impl ShapeI for Rect {
-    type Output = usize;
+    type Output = f64;
     const NAME: &'static str = "Rect";
 
     fn area(&self) -> Self::Output {

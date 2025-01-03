@@ -1,11 +1,11 @@
 #[auto_delegate::delegate]
 trait ShapeI {
-    fn area(&self) -> usize;
+    fn area(&self) -> f64;
 }
 
 struct Rect {
-    width: usize,
-    height: usize,
+    width: f64,
+    height: f64,
 }
 
 #[derive(auto_delegate::Delegate)]
@@ -15,16 +15,16 @@ enum Shape {
 }
 
 impl ShapeI for Rect {
-    fn area(&self) -> usize {
+    fn area(&self) -> f64 {
         self.width * self.height
     }
 }
 
 fn main() {
-    let rect = Rect { width: 2, height: 3 };
-    assert_eq!(rect.area(), 6);
+    let rect = Rect { width: 2.0, height: 3.0 };
+    assert_eq!(rect.area(), 6.0);
     let shape = Shape::Rect(rect);
-    assert_eq!(shape.area(), 6);
+    assert_eq!(shape.area(), 6.0);
 }
 
 // The result of `cargo expand`:
@@ -35,7 +35,7 @@ fn main() {
 // #[macro_use]
 // extern crate std;
 // trait ShapeI {
-//     fn area(&self) -> usize;
+//     fn area(&self) -> f64;
 // }
 // impl<DelegateImpl> ShapeI for DelegateImpl
 // where
@@ -489,7 +489,7 @@ fn main() {
 //     >>::L: ShapeI,
 // {
 //     #[inline(always)]
-//     fn area(&self) -> usize {
+//     fn area(&self) -> f64 {
 //         let m = self.delegate_by_ref();
 //         if let Some(t) = m.0 {
 //             return t.area();
@@ -533,8 +533,8 @@ fn main() {
 //     }
 // }
 // struct Rect {
-//     width: usize,
-//     height: usize,
+//     width: f64,
+//     height: f64,
 // }
 // #[to(ShapeI)]
 // enum Shape {
@@ -694,13 +694,13 @@ fn main() {
 //     }
 // }
 // impl ShapeI for Rect {
-//     fn area(&self) -> usize {
+//     fn area(&self) -> f64 {
 //         self.width * self.height
 //     }
 // }
 // fn main() {
-//     let rect = Rect { width: 2, height: 3 };
-//     match (&rect.area(), &6) {
+//     let rect = Rect { width: 2.0, height: 3.0 };
+//     match (&rect.area(), &6.0) {
 //         (left_val, right_val) => {
 //             if !(*left_val == *right_val) {
 //                 let kind = ::core::panicking::AssertKind::Eq;
@@ -714,7 +714,7 @@ fn main() {
 //         }
 //     };
 //     let shape = Shape::Rect(rect);
-//     match (&shape.area(), &6) {
+//     match (&shape.area(), &6.0) {
 //         (left_val, right_val) => {
 //             if !(*left_val == *right_val) {
 //                 let kind = ::core::panicking::AssertKind::Eq;

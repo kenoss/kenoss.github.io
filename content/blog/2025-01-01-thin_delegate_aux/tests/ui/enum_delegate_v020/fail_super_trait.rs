@@ -2,13 +2,13 @@ use enum_delegate_v020 as enum_delegate;
 
 #[enum_delegate::register]
 trait ShapeI: std::fmt::Debug {
-    fn area(&self) -> usize;
+    fn area(&self) -> f64;
 }
 
 #[derive(Debug)]
 struct Rect {
-    width: usize,
-    height: usize,
+    width: f64,
+    height: f64,
 }
 
 #[derive(Debug)]
@@ -18,14 +18,9 @@ enum Shape {
 }
 
 impl ShapeI for Rect {
-    fn area(&self) -> usize {
+    fn area(&self) -> f64 {
         self.width * self.height
     }
 }
 
-fn main() {
-    let rect = Rect { width: 2, height: 3 };
-    assert_eq!(rect.area(), 6);
-    let shape = Shape::Rect(rect);
-    assert_eq!(shape.area(), 6);
-}
+fn main() {}

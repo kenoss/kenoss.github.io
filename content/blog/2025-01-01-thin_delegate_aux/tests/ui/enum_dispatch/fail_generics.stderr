@@ -3,7 +3,7 @@ error[E0277]: cannot multiply `T` by `T`
    |
 12 |   trait ShapeI {
    |  _______-
-13 | |     fn area(&self) -> usize;
+13 | |     fn area(&self) -> f64;
    | |_____^^____- required by a bound introduced by this call
    |       |
    |       no implementation for `T * T`
@@ -18,11 +18,11 @@ note: required for `Rect<T>` to implement `ShapeI`
    |        ------------- unsatisfied trait bound introduced here
 help: consider restricting type parameter `T`
    |
-11 | #[enum_dispatch::enum_dispatch(Shape<usize>)]: std::ops::Mul
-   |                                              +++++++++++++++
+11 | #[enum_dispatch::enum_dispatch(Shape<f64>)]: std::ops::Mul
+   |                                            +++++++++++++++
 
-error[E0605]: non-primitive cast: `<T as Mul>::Output` as `usize`
+error[E0605]: non-primitive cast: `<T as Mul>::Output` as `f64`
   --> tests/ui/enum_dispatch/fail_generics.rs:21:9
    |
-21 |         (self.width * self.height) as usize
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can only be used to convert between primitive types or to coerce to a specific trait object
+21 |         (self.width * self.height) as f64
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can only be used to convert between primitive types or to coerce to a specific trait object
