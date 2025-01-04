@@ -5,10 +5,15 @@
 {% endblock title %}
 
 {% block ogp %}
-<meta property="og:site_name" content="{{ config.extra.site_name }}" />
+<meta property="og:image" content="{{ config.base_url }}{{ config.extra.site_ogp_path }}" />
 <meta property="og:title" content="{{ page.title }}" />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="{{ config.base_url }}{{ page.path }}" />
+
+<meta property="og:site_name" content="{{ config.extra.site_name }}" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
 {% endblock ogp %}
 
 {% block main %}

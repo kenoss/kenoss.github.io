@@ -26,3 +26,4 @@ highlight_code = true
 site_name = "冷たき沢の岩陰の"
 author = "keno"
 copyright = "© 2021--2024. All rights reserved."
+site_ogp_path = "/ogp.jpg"
