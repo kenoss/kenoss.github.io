@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+crate thin_delegate を書いた (4&#x2F;4) | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="crate thin_delegate を書いた (4&#x2F;4)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-01-05-thin_delegate-4&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">crate thin_delegate を書いた (4&#x2F;4)</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-01-05" class="post-date" itemprop="datePublished">
+                2025-01-05
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 thin_delegate</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <ul>
+<li><a href="../2025-01-02-thin_delegate-1">1章: <code>thin_delegate</code> の紹介</a></li>
+<li><a href="../2025-01-03-thin_delegate-2">2章: proc macro 間での情報伝達と delegation crate 比較</a></li>
+<li><a href="../2025-01-04-thin_delegate-3">3章: <code>thin_delegate</code> の設計と実装</a></li>
+<li><a href="../2025-01-05-thin_delegate-4">4章: まとめ</a>
+<ul>
+<li><a href="https://kenoss.github.io/blog/2025-01-05-thin_delegate-4/./#contribution-and-rfcs">thin_delegate の contribution と delegation RFC</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-05-thin_delegate-4/./#summary">完走した感想</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="4zhang-matome">4章: まとめ</h2>
+<p>ここまで使い方, 核となる仕組み, 設計と実装を見ました.
+この章では将来の展望とまとめを述べます.</p>
+<h3 id="contribution-and-rfcs">thin_delegate の contribution と delegation RFC</h3>
+<p>関連する RFC:
+<a href="https://github.com/rust-lang/rfcs/pull/1406">rfcs#1406</a>,
+<a href="https://github.com/rust-lang/rfcs/pull/2393">rfcs#2393</a>,
+<a href="https://github.com/rust-lang/rfcs/pull/3530">rfcs#3530</a>.</p>
+<p>振り返ってみると, 必要なパーツそれぞれは概ね既知であったようにも感じます.
+結局何が thin_delegate の contribution だったのでしょうか?</p>
+<ul>
+<li>既存の crate を注意深く分析した.</li>
+<li>この目的にはこの構文がおそらく最良であろうと信じて投資した.
+<ul>
+<li>構文のアイデア自体は
+<a href="https://github.com/rust-lang/rfcs/pull/2393#issuecomment-394498215">rfcs#2329 のコメント</a>
+で提案されていたし, portrait が部分的に実装もしていた.</li>
+</ul>
+</li>
+<li>missing parts を真面目に埋めた.
+<ul>
+<li><code>scheme</code>, <code>external_trait_def</code>, <code>GenericParamReplacer</code>, ...</li>
+</ul>
+</li>
+<li>外部 crate の trait 定義読み込みを諦めてコピペ方式に全振りした.</li>
+<li><strong>trait/struct/enum から <code>TokenStream</code> を得られさえすればこのタイプの
+delegation は proc macro だけでかなりの満足度が得られることを示した</strong></li>
+</ul>
+<p>最後のものはこれまで説明しませんでした. (みっつめと関係します.)</p>
+<p>基本的な動作は, <code>#[thin_delegate::register]</code> で trait/struct/enum の定義の <code>TokenStream</code> を提供する decl mcaro (4-1) を定義し,
+<code>#[thin_delegate::fill_delegate]</code> はそれを使って <code>#[thin_delegate::__internal__fill_delegate]</code> に処理を委譲する
+というものでした.</p>
+<p>では (4-1) の機能が rustc によって提供されたらどうなるでしょうか?
+thin_delegate の場合, <code>#[thin_delegate::register]</code> を付けなくてもよくなることはもちろんですが,
+外部 crate の trait 定義を <code>external_trait_def</code> の module 配下にコピペするといった手間もなくなります.
+定義側に対応は必要なく, 使う側で好きな proc macro を使えばいいだけです.
+加えて, thin_delegate の構文が好みではない場合 <sup class="footnote-reference"><a href="#401">1</a></sup>, 別の構文の proc macro を作ることも簡単に可能になります.</p>
+<p><a href="https://github.com/rust-lang/rfcs/pull/3530#issuecomment-1824320933">Kobzol のコメント</a>
+もほぼ同じことを言っている様に見えます. 「全てのユースケースを言語レベルで解決するのは practical ではないかもしれない」
+あたりが特にそうです.</p>
+<p>言語レベルでの delegation サポート rfcs#3530 に対するこの方式の利点は, 構文の問題を third-party crates に競わせ,
+最適なものを選び取るのを遅延させることができるという点です. <a href="https://github.com/rust-lang/rfcs/pull/1406">rfcs#1406</a>
+が出てから9年かかっています. 細かい構文で議論するよりも機能をすぐに使いたいというのが正直なところです.
+デメリットは定義の <code>TokenStream</code> を取得するという強力な API が手に入ると人類はどう悪用するかわからん, などでしょうか.
+あと, thin_delegate は trait method の自動 delegation しかサポートしていないので (斜め読みした限りでは)
+rcfs#3530 よりは狭い.</p>
+<p>必要となる機能の詳細として現時点で考えられるものを挙げてみます:</p>
+<ul>
+<li>macro 評価フェーズで解決し, trait/struct/enum の定義の <code>TokenStream</code> に展開される macro 的なもの <code>def_of()</code>.
+<ul>
+<li>その <code>TokenStream</code> が元の <code>TokenStream</code> とどう違うべきなのかはわからない.</li>
+</ul>
+</li>
+<li>但し, その中の path は全て元の文脈で解決され full path で置き換えられている.</li>
+</ul>
+<p>これはこれで RFC になる気はする...?</p>
+<p>正直なところ, 自分が使う分だけであれば thin_delegate で満足してしまっている.
+rfcs#3530 で専門家が真面目に考えてくれるならお任せするのがベストかもしれん.
+でも折角見つけたネタなので一枚噛んでおきたい気持ちもある.</p>
+<p>やるべきこととしては, 関連 RFC をちゃんと読んで, 特に rfcs#3530 の方向性を把握して,
+提案を受け入れられそうな形にして出すという感じになると思う.
+僕は英語の読み書きがめっちゃ遅いので誰か手伝ってくれるとありがたい.
+(あとこの活動は yak shaving なのでそこそこにして本来の活動に戻りたい気持ちもある.)</p>
+<h3 id="summary">完走した感想</h3>
+<p>完走したと言っていいのかこれ...?</p>
+<p>元々 thin_delegate は sabiniwm を書く上で本質的ではないコードが多くノイズになっていると感じたことから始まりました.
+あんまり yak shaving を深くはしたくなかったのですが,
+僕はワーキングメモリが少ないのでノイズが多いコードは効率が下がるので苦手だし,
+おそらく真面目にやればできるんじゃないかという気がしたので脇道に逸れることにしました.
+結果, 個人的には満足いくものができました.</p>
+<p>他の人から見るとどうなんですかね? RFC などで欲しいと言われていた機能ではあるけど,
+ボイラープレート削減するだけと言えばだけなので †強者† には必要ない気もします.
+この記事も結局自明なことしか書いてないので「『自明』と書くだけでこの厚み?」と言われちゃいそう...
+まぁ頭から flush しておかないといけないのであんまり気にしても仕方がないんですが.</p>
+<p>proc macro を書くのは初めてだったので, proc macro workshop をやってから
+習作として <a href="https://github.com/kenoss/struct_cache_field">struct_cache_field</a> を作りました. 1ヶ月くらい.
+thin_delegate を弄っていたのは2ヶ月くらい.</p>
+<p>そうそう. proc macro 初心者なので誰かにレビューしてもらった方が良いなと思っています.
+proc macro 書いたことあってレビューしてやってもいいよという方,
+<a href="https://github.com/kenoss/thin_delegate/issues/1">issue</a> でご連絡ください.</p>
+<p>長文おつきあいありがとうございました. 明けましておめでとうございます.</p>
+<div class="footnote-definition" id="401"><sup class="footnote-definition-label">1</sup>
+<p>例えば <a href="https://github.com/rust-lang/rfcs/pull/2393">rfcs#2393</a> で議論されている各種構文.
+但し syn のサポートはない.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

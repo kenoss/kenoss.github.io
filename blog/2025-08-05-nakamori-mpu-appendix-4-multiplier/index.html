@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+中森 MPU 行間埋め Appendix IV 後半 乗算器 | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="中森 MPU 行間埋め Appendix IV 後半 乗算器" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-08-05-nakamori-mpu-appendix-4-multiplier&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
+      integrity="sha384-5TcZemv2l/9On385z///+d7MSYlvIEw9FuZTIdZ14vJLqWphw7e7ZPuOiCHJcFCP"
+      crossorigin="anonymous">
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"
+        integrity="sha384-cMkvdD8LoxVzGF/RPUKAcvmm49FQ0oxwDF3BGKtDXcEc+T1b2N+teh/OJfpU0jr6"
+        crossorigin="anonymous"></script>
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"
+        integrity="sha384-hCXGrW6PitJEwbkoStFjeJxv+fSOOQKOPbJxSfM6G5sWZjAyWhXiTIIAmQqnlLlh"
+        crossorigin="anonymous"></script>
+<script>
+   document.addEventListener("DOMContentLoaded", function() {
+     renderMathInElement(document.body, {
+       delimiters: [
+         {left: '$$', right: '$$', display: true},
+         {left: '$', right: '$', display: false},
+         {left: '\\[', right: '\\]', display: true},
+         {left: '\\(', right: '\\)', display: false}
+       ],
+       throwOnError : false
+     });
+   });
+</script>
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">中森 MPU 行間埋め Appendix IV 後半 乗算器</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-08-05" class="post-date" itemprop="datePublished">
+                2025-08-05
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 中森 MPU</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <p>$$
+\gdef\defeq{\mathrel{\mathop:}=}
+$$</p>
+<p><a href="../2025-08-04-nakamori-mpu-appendix-4-adder">前回</a> の続きで乗算器.</p>
+<p>コードは Python.</p>
+<h2 id="disclaimer">Disclaimer</h2>
+<p>論理合成とか信号処理とか全然わからない. 自分が納得できるまで調べた結果をまとめているだけである.</p>
+<p>あと今回の内容は
+<a href="https://ja.wikipedia.org/wiki/%E3%83%96%E3%83%BC%E3%82%B9%E3%81%AE%E4%B9%97%E7%AE%97%E3%82%A2%E3%83%AB%E3%82%B4%E3%83%AA%E3%82%BA%E3%83%A0">Wikipedia -- ブースの乗算アルゴリズム</a>
+を読めば大体わかるものである.</p>
+<h2 id="wen-ti-she-ding">問題設定</h2>
+<p>Q. n bit の整数ふたつ $x, y$ を乗算したい.</p>
+<p>signed と仮定してよい. (本書参照.)</p>
+<p>(非標準的記法) <code>0b&lt;abcd&gt;_&lt;efgh&gt;</code> などを下位 bit から先に書いて <code>0q&lt;hgfe&gt;~&lt;dcba&gt;</code> などと書くことにする. (数学者かリトルエンディアンの気持ち.)</p>
+<p>$X$ の $i$ bit 目を $X_i$ で表す.</p>
+<p>$$
+\begin{align*}
+xy
+&amp;= x \left( \sum_{i=0}^{\infty} 2^i y_i \right) \\
+&amp;= \sum_{i=0}^{\infty} (2^i x) y_i
+\end{align*}
+$$</p>
+<p>愚直にやると n bit 乗算は n 回和を取ることで実現できる. (固定 bit シフトはタダみたいなものなので忘れる.)
+<a href="https://en.wikipedia.org/wiki/Modular_exponentiation">modexp</a> みたいな感じですね.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span># 8-bit 乗算
+</span><span>def mul8(x: int, y: int):
+</span><span>    r = 0
+</span><span>    for i in range(0, 8):
+</span><span>        print(i, x, y, r)
+</span><span>        y_ = y &amp; 0b1
+</span><span>        a: int
+</span><span>        if y_ == 0b0:
+</span><span>            a = 0
+</span><span>        elif y_ == 0b1:
+</span><span>            a = x
+</span><span>        r += a
+</span><span>        x = x &lt;&lt; 1
+</span><span>        y = y &gt;&gt; 1
+</span><span>    return r
+</span></code></pre>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&gt;&gt;&gt; mul8(10, 224 + 6)
+</span><span>0 10 230 0
+</span><span>1 20 115 0
+</span><span>2 40 57 20
+</span><span>3 80 28 60
+</span><span>4 160 14 60
+</span><span>5 320 7 60
+</span><span>6 640 3 380
+</span><span>7 1280 1 1020
+</span><span>2300
+</span></code></pre>
+<p>ループ回数と和を減らしたい. (回路に落とすため, 和をしない場合は 0 を足すと見做す.)</p>
+<h2 id="booth-noarugorizumu">Booth のアルゴリズム</h2>
+<p>ところで <code>y = 0q1110~0000</code> の様に1が連続している部分がひとつのときはもっと簡単である.</p>
+<p>$$
+\begin{align*}
+y
+&amp;= 2^0 + 2^1 + 2^2 \\
+&amp;= 2^3 - 2^0       \\
+xy
+&amp;= 2^0 (-x) + 2^3 x
+\end{align*}
+$$</p>
+<p>$-x$ を事前計算しておいて $x, -x$ をシフトしていけば和が2回になった.</p>
+<p><code>y = 0q0011~1100</code> の様に位置や幅が変わっても同じである.</p>
+<p>$$
+\begin{align*}
+y
+&amp;= 2^2 + 2^3 + 2^4 + 2^5 \\
+&amp;= 2^6 - 2^2             \\
+xy
+&amp;= 2^2 (-x) + 2^6 x
+\end{align*}
+$$</p>
+<p><code>y = 0q0110~0111</code> の様に1が連続する部分が複数ある場合, <code>y' = 0q0110~0000</code> と <code>y'' = 0q0000~0111</code> に分けて計算すればよい.</p>
+<p>$$
+xy = x (y' + y'') = 2^1 (-x) + 2^3 x + 2^5 (-x) + 2^8 x
+$$</p>
+<p>つまり一般に, 立ち上がり <code>0q01</code> のときはシフトした $-x$ を足し, 立ち下がり <code>0q10</code> のときはシフトした $x$ を足せばよい.</p>
+<p>2-bit ずつ見ていく場合は以下の様になる.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span># 8-bit 乗算, Booth のアルゴリズム, 幅 2
+</span><span>def mul8_booth2(x: int, y: int):
+</span><span>    mx = -x
+</span><span>    # y の 0 bit 目を下の i = 0 のときの 0b10 で足し込みたいので仮想的な -1 bit 目を値 0 で追加.
+</span><span>    y = y &lt;&lt; 1
+</span><span>    r = 0
+</span><span>    # y の -1 bit 目を足したのでループ回数は1回増える.
+</span><span>    for i in range(0, 9):
+</span><span>        print(i, x, mx, y, r)
+</span><span>        y_ = y &amp; 0b11
+</span><span>        a: int
+</span><span>        if y_ == 0b00:
+</span><span>            a = 0
+</span><span>        elif y_ == 0b01:
+</span><span>            a = x
+</span><span>        elif y_ == 0b10:
+</span><span>            a = mx
+</span><span>        elif y_ == 0b11:
+</span><span>            a = 0
+</span><span>        r += a
+</span><span>        x = x &lt;&lt; 1
+</span><span>        mx = mx &lt;&lt; 1
+</span><span>        y = y &gt;&gt; 1
+</span><span>    return r
+</span></code></pre>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&gt;&gt;&gt; mul8_booth2(10, 224 + 6)
+</span><span>0 10 -10 460 0
+</span><span>1 20 -20 230 0
+</span><span>2 40 -40 115 -20
+</span><span>3 80 -80 57 -20
+</span><span>4 160 -160 28 60
+</span><span>5 320 -320 14 60
+</span><span>6 640 -640 7 -260
+</span><span>7 1280 -1280 3 -260
+</span><span>8 2560 -2560 1 -260
+</span><span>2300
+</span></code></pre>
+<p>これだとまだループ回数は減っていない. 幅を 3 にしよう. 先程とは違い, 立ち上がりと立ち下がりが同時に起き得ることに注意する. (<code>0q010</code> と <code>0q101</code>.)</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span># 8-bit 乗算, Booth のアルゴリズム, 幅 3
+</span><span>def mul8_booth3(x: int, y: int):
+</span><span>    mx = -x
+</span><span>    y = y &lt;&lt; 1
+</span><span>    r = 0
+</span><span>    for i in range(0, 5):
+</span><span>        print(i, x, mx, y, r)
+</span><span>        y_ = y &amp; 0b111
+</span><span>        a: int
+</span><span>        if y_ == 0b000:
+</span><span>            a = 0
+</span><span>        elif y_ == 0b001:
+</span><span>            a = x
+</span><span>        elif y_ == 0b010:
+</span><span>            # a = (x &lt;&lt; 1) + mx
+</span><span>            a = x
+</span><span>        elif y_ == 0b011:
+</span><span>            a = (x &lt;&lt; 1)
+</span><span>        elif y_ == 0b100:
+</span><span>            a = (mx &lt;&lt; 1)
+</span><span>        elif y_ == 0b101:
+</span><span>            # a = (mx &lt;&lt; 1) + x
+</span><span>            a = mx
+</span><span>        elif y_ == 0b110:
+</span><span>            a = mx
+</span><span>        elif y_ == 0b111:
+</span><span>            a = 0
+</span><span>        r += a
+</span><span>        x = x &lt;&lt; 2
+</span><span>        mx = mx &lt;&lt; 2
+</span><span>        y = y &gt;&gt; 2
+</span><span>    return r
+</span></code></pre>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>&gt;&gt;&gt; mul8_booth3(10, 224 + 6)
+</span><span>0 10 -10 460 0
+</span><span>1 40 -40 115 -20
+</span><span>2 160 -160 28 60
+</span><span>3 640 -640 7 -260
+</span><span>4 2560 -2560 1 -260
+</span><span>2300
+</span></code></pre>
+<p>これでループと和の回数が半分になった. これが <strong>Booth のアルゴリズム</strong> である.</p>
+<p>乗算器では BCLA ではなく Carry Save Adder (CSA) を用いるといったことは本書参照.</p>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

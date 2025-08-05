@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+crate thin_delegate を書いた (1&#x2F;4) | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="crate thin_delegate を書いた (1&#x2F;4)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-01-02-thin_delegate-1&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">crate thin_delegate を書いた (1&#x2F;4)</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-01-02" class="post-date" itemprop="datePublished">
+                2025-01-02
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 thin_delegate</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <ul>
+<li><a href="../2025-01-02-thin_delegate-1">1章: <code>thin_delegate</code> の紹介</a></li>
+<li><a href="../2025-01-03-thin_delegate-2">2章: proc macro 間での情報伝達と delegation crate 比較</a></li>
+<li><a href="../2025-01-04-thin_delegate-3">3章: <code>thin_delegate</code> の設計と実装</a></li>
+<li><a href="../2025-01-05-thin_delegate-4">4章: まとめ</a></li>
+</ul>
+<h2 id="crate-thin-delegate-woshu-ita">crate <code>thin_delegate</code> を書いた</h2>
+<p><a href="https://github.com/kenoss/thin_delegate"><code>thin_delegate</code></a> という crate を書きました.
+thin_delegate は <strong>trait method <sup class="footnote-reference"><a href="#101">1</a></sup> を delegation によって自動生成する proc macro</strong> を提供します.
+このような crate は他にもありますが, <a href="https://github.com/kenoss/sabiniwm"><code>sabiniwm</code></a> を実装する上で色々制限があったり機能が足りませんでした.
+thin_delegate は</p>
+<ul>
+<li>制限が (ほぼ) なく使いやすい API と丁寧なエラー</li>
+<li>良いデフォルト (auto impl for thin delegation) と柔軟な例外への対応</li>
+<li>「合法な実装」</li>
+</ul>
+<p>が特徴です.</p>
+<p>作成にあたって色々勉強になったので記事として纏めておこうと思います. 4つの記事 (章) に分けて連投していきます.</p>
+<ul>
+<li><a href="../2025-01-02-thin_delegate-1">1章</a> (この記事) では thin_delegate が扱う問題と具体的な使い方を紹介します.</li>
+<li><a href="../2025-01-03-thin_delegate-2">2章</a> ではこのシチュエーションにおいて複数の proc macro 間で情報を伝達する方法の分類, および既存 crate の紹介・評価を行います.
+「合法な実装」とは何かについてもここで述べます.</li>
+<li><a href="../2025-01-04-thin_delegate-3">3章</a> では thin_delegate の設計および実装詳細について述べます.</li>
+<li><a href="../2025-01-05-thin_delegate-4">4章</a> では全体のまとめを述べます.</li>
+</ul>
+<p>crate を使いたいだけであれば1章だけ見れば十分です.
+2章以降は内部実装の話になります.</p>
+<p>長くなりますが年末年始のお茶請けにでもどうぞ.</p>
+<h2 id="1zhang-thin-delegate-noshao-jie">1章: <code>thin_delegate</code> の紹介</h2>
+<h3 id="wen-ti-trait-method-to-delegation">問題: trait method と delegation</h3>
+<p>delegation (委譲) とは処理を他の誰かに委譲することを指すらしいです.</p>
+<p><a href="https://en.wikipedia.org/wiki/Delegation_pattern">Wikipedia -- Delegation pattern</a> から引用します.</p>
+<pre data-lang="kotlin" style="background-color:#2b303b;color:#c0c5ce;" class="language-kotlin "><code class="language-kotlin" data-lang="kotlin"><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Rect</span><span>(</span><span style="color:#b48ead;">val </span><span>width: </span><span style="color:#b48ead;">Int</span><span>, </span><span style="color:#b48ead;">val </span><span>height: </span><span style="color:#b48ead;">Int</span><span>) {
+</span><span>    </span><span style="color:#b48ead;">fun </span><span style="color:#8fa1b3;">area</span><span>() = width * height
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Window</span><span>(</span><span style="color:#b48ead;">val </span><span>bounds: Rect) {
+</span><span>    </span><span style="color:#65737e;">// Delegation
+</span><span>    </span><span style="color:#b48ead;">fun </span><span style="color:#8fa1b3;">area</span><span>() = bounds.area()
+</span><span>}
+</span></code></pre>
+<p>この例では <code>Window</code> が <code>bounds: Rect</code> field を持ち, 明示的に <code>Window::area()</code> を <code>Rect::area()</code> に delegate
+しています.</p>
+<pre data-lang="kotlin" style="background-color:#2b303b;color:#c0c5ce;" class="language-kotlin "><code class="language-kotlin" data-lang="kotlin"><span style="color:#b48ead;">interface </span><span style="color:#ebcb8b;">ShapeI</span><span> {
+</span><span>    </span><span style="color:#b48ead;">fun </span><span style="color:#8fa1b3;">area</span><span>(): </span><span style="color:#b48ead;">Int
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Rect</span><span>(</span><span style="color:#b48ead;">val </span><span>width: </span><span style="color:#b48ead;">Int</span><span>, </span><span style="color:#b48ead;">val </span><span>height: </span><span style="color:#b48ead;">Int</span><span>) : </span><span style="color:#a3be8c;">ShapeI</span><span> {
+</span><span>    </span><span style="color:#b48ead;">override fun </span><span style="color:#8fa1b3;">area</span><span>() = width * height
+</span><span>}
+</span><span>
+</span><span style="color:#65737e;">// The ShapeI implementation of Window delegates to that of the Rect that is bounds
+</span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Window</span><span>(</span><span style="color:#b48ead;">private val </span><span>bounds: Rect) : </span><span style="color:#a3be8c;">ShapeI by bounds
+</span></code></pre>
+<p>この例では <code>Window</code> が <code>bounds: Rect</code> フィールドを持ち, <code>ShapeI</code> という interface を <code>Rect</code> に delegate
+しています.</p>
+<p>厳密には
+<a href="https://en.wikipedia.org/wiki/Delegation_pattern">delegation</a> と
+<a href="https://en.wikipedia.org/wiki/Forwarding_(object-oriented_programming)">forwarding</a> と
+<a href="https://en.wikipedia.org/wiki/Proxy_pattern">proxy</a> と
+<a href="https://en.wikipedia.org/wiki/Facade_pattern">facade</a>
+は違う!もっとよく見ろ!!と言われそうですが, この記事では区別せず delegation と呼ぶことにします.
+(筆者は違いを知らないし興味もない.)</p>
+<p>Rust で書くと以下の様な感じでしょうか.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Window {
+</span><span>    </span><span style="color:#bf616a;">rect</span><span>: Rect,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Window {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        ShapeI::area(&amp;</span><span style="color:#bf616a;">self</span><span>.rect) </span><span style="color:#65737e;">// (1-1)
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>trait を使っているにもかかわらず (1-1) で明示的に delegation しています.
+これがこの記事の主題です. すなわち
+<strong>Rust で trait method を delegation するのを楽にしたい</strong>
+です.
+簡単のため, 一連の記事では <strong>trait method の自動 delegation</strong> と呼称します.</p>
+<p>この例では method がひとつなので手動でやっても別に問題にはなりません. しかし記述が煩雑になる要素はたくさんあります:</p>
+<ul>
+<li>method の数 (3個以上だとしんどい.)</li>
+<li>method の引数 (<code>self</code> 以外が生えた瞬間にしんどい.)</li>
+<li>enum variant の数 (enum になった瞬間にしんどい.)</li>
+<li>継続的なメンテナンス (trait 定義を変えたり外部 crate の update で変わったりしたときに絶望.)</li>
+</ul>
+<p>というわけで, 自動でできるなら自動でやった方が良いです. 面倒なことはコンピュータにやらせよう.</p>
+<h3 id="jie-fa-thin-delegate">解法: <code>thin_delegate</code></h3>
+<p>proc macro <code>thin_delegate</code> はこの問題を解決します.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>] </span><span style="color:#65737e;">// (1-2)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>] </span><span style="color:#65737e;">// (1-3)
+</span><span style="color:#b48ead;">struct </span><span>Window {
+</span><span>    </span><span style="color:#bf616a;">rect</span><span>: Rect,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>]
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Window {} </span><span style="color:#65737e;">// (1-4)
+</span></code></pre>
+<p>まず trait 定義 (1-2) と struct 定義 (1-3) に <code>#[thin_delegate::register]</code> を付けます.
+そうすると (1-4) の <code>impl ShapeI for Window {}</code> のところで <code>#[thin_delegate::fill_delegate]</code>
+が自動で (1-1) の様なコードを生成してくれます <sup class="footnote-reference"><a href="#102">2</a></sup>.</p>
+<p>thin_delegate には便利な機能がいくつかありますが, 主要なものを紹介します.</p>
+<ul>
+<li>ergonomic <sup class="footnote-reference"><a href="#103">3</a></sup></li>
+<li>エラーが読みやすい <sup class="footnote-reference"><a href="#104">4</a></sup></li>
+<li>Generics, trait bound, GATs などの制限なし (のはず. 駄目なケースが発見されてないだけ <sup class="footnote-reference"><a href="#105">5</a></sup>.)</li>
+<li>外部 crate の trait 定義を利用する (<code>external_trait_def</code>)
+<ul>
+<li><a href="https://github.com/kenoss/thin_delegate/blob/main/tests/ui/pass_external_trait_def.rs">基本</a></li>
+<li><a href="https://github.com/kenoss/thin_delegate/blob/main/tests/ui/pass_external_trait_def_with_uses.rs"><code>with_uses</code> で自動で <code>use</code> する</a></li>
+</ul>
+</li>
+<li>メソッド生成ルールを弄って自明じゃない delegation をする (<code>scheme</code>) <sup class="footnote-reference"><a href="#106">6</a></sup>
+<ul>
+<li><a href="https://github.com/kenoss/thin_delegate/blob/main/tests/ui/pass_scheme.rs">struct</a></li>
+<li><a href="https://github.com/kenoss/thin_delegate/blob/main/tests/ui/pass_scheme_enum.rs">enum</a></li>
+</ul>
+</li>
+<li><a href="https://github.com/kenoss/thin_delegate/blob/main/tests/ui/pass_items_in_impl.rs">手動で実装したい部分は手動で実装可能</a> <sup class="footnote-reference"><a href="#107">7</a></sup></li>
+</ul>
+<p>基本的な使い方は <a href="https://docs.rs/thin_delegate/latest/thin_delegate/">ドキュメント</a> を読んでください.</p>
+<p>関連する RFC として
+<a href="https://github.com/rust-lang/rfcs/pull/1406">rfcs#1406</a>,
+<a href="https://github.com/rust-lang/rfcs/pull/2393">rfcs#2393</a>,
+<a href="https://github.com/rust-lang/rfcs/pull/3530">rfcs#3530</a>
+があります.</p>
+<h3 id="real-world-example-sabiniwm">Real world example: sabiniwm</h3>
+<p>実際の使い方として sabiniwm (commit <a href="https://github.com/kenoss/sabiniwm/tree/ed5d2c9">1904a51</a>) を見てみます.</p>
+<h4 id="external-trait-def">external_trait_def</h4>
+<p>まず基本的に sabiniwm は smithay などの外部 crate の trait をたくさん使っています.
+delegate 対象の外部 crate の trait は
+<a href="https://github.com/kenoss/sabiniwm/blob/1904a51bd3346154a60551cda70f6bfd0f3b63f2/crates/sabiniwm/src/external_trait_def.rs">crates/sabiniwm/src/external_trait_def.rs</a>
+で管理しています. <code>mod</code> に <code>#[thin_delegate::external_trait_def(with_uses = true)]</code> を付け,</p>
+<ol>
+<li>この <code>mod</code> は外部 crate の trait をコピペするための場所であること,</li>
+<li><code>#[thin_delegate::fill_delegate]</code> したときに自動で <code>use</code> すべきこと,</li>
+</ol>
+<p>を宣言しています. その中に <code>#[thin_delegate::register]</code> を書いていきます.</p>
+<p>trait の定義が更新されたときは <code>external_trait_def</code> の該当部分をコピペで更新するだけです.</p>
+<h4 id="focus-rs">focus.rs</h4>
+<p>実際に利用しているのは例えば
+<a href="https://github.com/kenoss/sabiniwm/blob/1904a51bd3346154a60551cda70f6bfd0f3b63f2/crates/sabiniwm/src/focus.rs">crates/sabiniwm/src/focus.rs</a>
+です.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(derive_more::From, Debug, Clone, PartialEq)]
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub enum </span><span>PointerFocusTarget {
+</span><span>    WlSurface(smithay::reexports::wayland_server::protocol::wl_surface::WlSurface),
+</span><span>    X11Surface(smithay::xwayland::X11Surface),
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::utils)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::utils::IsAlive </span><span style="color:#b48ead;">for </span><span>PointerFocusTarget {}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::input::pointer)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::input::pointer::PointerTarget&lt;SabiniwmState&gt; </span><span style="color:#b48ead;">for </span><span>PointerFocusTarget {}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::input::touch)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::input::touch::TouchTarget&lt;SabiniwmState&gt; </span><span style="color:#b48ead;">for </span><span>PointerFocusTarget {}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::wayland::seet)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::wayland::seat::WaylandFocus </span><span style="color:#b48ead;">for </span><span>PointerFocusTarget {}
+</span></code></pre>
+<p>これは単純ですね. <code>PointerFocusTarget</code> に対して例えば <code>smithay::input::pointer::PointerTarget</code> を impl するために trait 定義を
+<code>crate::external_trait_def::smithay::input::pointer</code> から引いています.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(derive_more::From, Debug, Clone, PartialEq)]
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub enum </span><span>KeyboardFocusTarget {
+</span><span>    Window(smithay::desktop::Window),
+</span><span>    LayerSurface(smithay::desktop::LayerSurface),
+</span><span>    Popup(smithay::desktop::PopupKind),
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::utils)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::utils::IsAlive </span><span style="color:#b48ead;">for </span><span>KeyboardFocusTarget {}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(
+</span><span>    external_trait_def = crate::external_trait_def::smithay::input::keyboard,
+</span><span>    scheme = |f| {
+</span><span>        match self {
+</span><span>            Self::</span><span style="color:#bf616a;">Window</span><span>(w) =&gt; match w.</span><span style="color:#bf616a;">underlying_surface</span><span>() { // (1-5)
+</span><span>                </span><span style="color:#bf616a;">smithay</span><span>::</span><span style="color:#bf616a;">desktop</span><span>::</span><span style="color:#bf616a;">WindowSurface</span><span>::</span><span style="color:#bf616a;">Wayland</span><span>(s) =&gt; </span><span style="color:#bf616a;">f</span><span>(s.</span><span style="color:#bf616a;">wl_surface</span><span>()),
+</span><span>                </span><span style="color:#bf616a;">smithay</span><span>::</span><span style="color:#bf616a;">desktop</span><span>::</span><span style="color:#bf616a;">WindowSurface</span><span>::</span><span style="color:#bf616a;">X11</span><span>(s) =&gt; </span><span style="color:#bf616a;">f</span><span>(s),
+</span><span>            }
+</span><span>            </span><span style="color:#bf616a;">Self</span><span>::</span><span style="color:#bf616a;">LayerSurface</span><span>(l) =&gt; </span><span style="color:#bf616a;">f</span><span>(l.</span><span style="color:#bf616a;">wl_surface</span><span>()),
+</span><span>            </span><span style="color:#bf616a;">Self</span><span>::</span><span style="color:#bf616a;">Popup</span><span>(p) =&gt; </span><span style="color:#bf616a;">f</span><span>(p.</span><span style="color:#bf616a;">wl_surface</span><span>()),
+</span><span>        }
+</span><span>    }
+</span><span>)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::input::keyboard::KeyboardTarget&lt;SabiniwmState&gt; </span><span style="color:#b48ead;">for </span><span>KeyboardFocusTarget {}
+</span></code></pre>
+<p>こちらは <code>impl smithay::input::keyboard::KeyboardTarget</code> に対して <code>scheme</code> が指定されています.
+(1-5) のところで <code>Window</code> の arm に対して <code>smithay::desktop::Window::underlying_surface()</code> で分岐する必要があるからです.
+(これは更に wrapper struct を噛ませてもいいのですが, 結局似たようなものになるのでこうしています.)</p>
+<p>ちなみに <a href="https://smithay.github.io/smithay/smithay/input/keyboard/trait.KeyboardTarget.html"><code>KeyboardTarget</code> の定義</a>
+は手で管理したくない程度には複雑です.</p>
+<p>(sabiniwm は anvil の fork であり) このファイルは
+<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/focus.rs">smithay/anvil/src/focus.rs</a>
+を元にしています. 書き換えの履歴 (一部抜粋
+<a href="https://github.com/kenoss/sabiniwm/commit/78f082cf0b10630d2af0c5fc1ec94209125ffaa0">78f082c</a>,
+<a href="https://github.com/kenoss/sabiniwm/commit/ffcb2dc59a7a046ae4618eeb60571145cd3f7688">ffcb2dc</a>,
+<a href="https://github.com/kenoss/sabiniwm/commit/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed">ed5d2c9</a>
+) を追うと人間が管理可能になっていく様子がわかると思います.</p>
+<h4 id="sabiniwm-backend-backendi">sabiniwm::backend::BackendI</h4>
+<p><a href="https://github.com/kenoss/sabiniwm/blob/1904a51bd3346154a60551cda70f6bfd0f3b63f2/crates/sabiniwm/src/backend/mod.rs">crates/sabiniwm/src/backend/mod.rs</a></p>
+<p>smithay を利用した Wayland compositor は udev/winit backend をサポートしているものが多いです. (winit は開発用.)
+これを切り替えるために
+<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L158"><code>AnvilState&lt;UdevData&gt;</code> の様に型パラメータを利用</a>
+しています.
+<code>AnvilState</code> を書くときに常に型パラメータと trait bound を書く必要があって非常にめんどいのと,
+これが anvil/src/udev.rs, anvil/src/winit.rs, anvil/src/main.rs で ベタ書き
+[<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L844">1</a>]
+[<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/main.rs#L45">2</a>]
+されている理由のひとつです.</p>
+<p>niri では <a href="https://github.com/YaLTeR/niri/blob/v0.1.10.1/src/backend/mod.rs">enum で定義</a> されています.</p>
+<p>sabiniwm では一度 <code>Box&lt;dyn BackendI&gt;</code> を経て
+[<a href="https://github.com/kenoss/sabiniwm/commit/e80231c493943dc533f1a9c95489723726920af8">1</a>]
+[<a href="https://github.com/kenoss/sabiniwm/commit/b00910d8aa6b2e0cf601c025f247d58e0b2d7500">2</a>],
+最終的に
+<a href="https://github.com/kenoss/sabiniwm/blob/1904a51bd3346154a60551cda70f6bfd0f3b63f2/crates/sabiniwm/src/backend/mod.rs">enum</a>
+での実装となりました <sup class="footnote-reference"><a href="#108">8</a></sup>.</p>
+<p>見所としては <code>scheme</code> を使うことで (1-6) の <code>#[cfg(feature = "winit")]</code> の分岐がちゃんと扱えていることでしょうか <sup class="footnote-reference"><a href="#109">9</a></sup>:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(derive_more::From)]
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub</span><span>(</span><span style="color:#b48ead;">crate</span><span>) </span><span style="color:#b48ead;">enum </span><span>Backend {
+</span><span>    Udev(udev::UdevBackend),
+</span><span>    #[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">winit</span><span>&quot;)]
+</span><span>    Winit(winit::WinitBackend),
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(
+</span><span>    external_trait_def = crate::external_trait_def::smithay::wayland::buffer,
+</span><span>    scheme = |f| {
+</span><span>        match self {
+</span><span>            Self::</span><span style="color:#bf616a;">Udev</span><span>(backend) =&gt; </span><span style="color:#bf616a;">f</span><span>(backend),
+</span><span>            #[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">winit</span><span>&quot;)]           // (1-6)
+</span><span>            </span><span style="color:#bf616a;">Self</span><span>::</span><span style="color:#bf616a;">Winit</span><span>(backend) =&gt; </span><span style="color:#bf616a;">f</span><span>(backend),
+</span><span>        }
+</span><span>    }
+</span><span>)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::wayland::buffer::BufferHandler </span><span style="color:#b48ead;">for </span><span>Backend {}
+</span></code></pre>
+<h4 id="render-elements">render_elements!</h4>
+<p>smithay では <code>render_elements!</code> というマクロで
+<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/drawing.rs#L53-L57">描画要素を定義します</a>.
+定義は <a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/src/backend/renderer/element/mod.rs#L1333">これ</a>.
+(人間には読めん...)</p>
+<p>niri はこれを <a href="https://github.com/YaLTeR/niri/blob/v0.1.10.1/src/render_helpers/render_elements.rs">人間が読める</a> ようにしています.
+(偉すぎる...)</p>
+<p>必須なのは delegation する部分だけなのでこれも
+<a href="https://github.com/kenoss/sabiniwm/blob/7a89f6dfc4cc46db66ea5e966e59db4ac500f6bd/crates/sabiniwm/src/render.rs#L12-L38">thin_delegate で書き換えています</a>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(derive_more::From)]
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub enum </span><span>CustomRenderElement&lt;R&gt;
+</span><span>where
+</span><span>    R: Renderer,
+</span><span>{
+</span><span>    Pointer(PointerRenderElement&lt;R&gt;),
+</span><span>    Surface(WaylandSurfaceRenderElement&lt;R&gt;),
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::backend::renderer::element)]
+</span><span style="color:#b48ead;">impl</span><span>&lt;R&gt; smithay::backend::renderer::element::Element </span><span style="color:#b48ead;">for </span><span>CustomRenderElement&lt;R&gt;
+</span><span style="color:#b48ead;">where
+</span><span>    R: smithay::backend::renderer::Renderer,
+</span><span>    &lt;R as smithay::backend::renderer::Renderer&gt;::TextureId: </span><span style="color:#b48ead;">&#39;static</span><span>,
+</span><span>    R: ImportAll + ImportMem,
+</span><span>{
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(external_trait_def = crate::external_trait_def::smithay::backend::renderer::element)]
+</span><span style="color:#b48ead;">impl</span><span>&lt;R&gt; smithay::backend::renderer::element::RenderElement&lt;R&gt; </span><span style="color:#b48ead;">for </span><span>CustomRenderElement&lt;R&gt;
+</span><span style="color:#b48ead;">where
+</span><span>    R: smithay::backend::renderer::Renderer,
+</span><span>    &lt;R as smithay::backend::renderer::Renderer&gt;::TextureId: </span><span style="color:#b48ead;">&#39;static</span><span>,
+</span><span>    R: ImportAll + ImportMem,
+</span><span>{
+</span><span>}
+</span></code></pre>
+<p>複雑な trait bound であってもちゃんと動いている!! <sup class="footnote-reference"><a href="#110">10</a></sup> 良いですね.</p>
+<h3 id="1zhang-matome">1章まとめ</h3>
+<ul>
+<li>問題: Rust で trait method を delegation するのを楽にしたい</li>
+<li>解法: <code>thin_delegate</code> という crate を書いたのでそれが使える</li>
+<li>既に <code>sabiniwm</code> で色々な使い方をしている</li>
+</ul>
+<p><a href="../2025-01-03-thin_delegate-2">2章</a> からは内部実装の話になります.</p>
+<div class="footnote-definition" id="101"><sup class="footnote-definition-label">1</sup>
+<p>正確には trait function/associated function である. <a href="https://doc.rust-lang.org/reference/items/traits.html">https://doc.rust-lang.org/reference/items/traits.html</a>
+しかし method の方が通りが良いのでこの記事ではそう呼ぶ.</p>
+</div>
+<div class="footnote-definition" id="102"><sup class="footnote-definition-label">2</sup>
+<p>「これって既にある crate <code>&lt;hoge&gt;</code> ですよね?」そうとも言えるしそうとも言えない. 2章と3章で議論します.</p>
+</div>
+<div class="footnote-definition" id="103"><sup class="footnote-definition-label">3</sup>
+<p>完全に主観でしかない.</p>
+</div>
+<div class="footnote-definition" id="104"><sup class="footnote-definition-label">4</sup>
+<p>完全に主観でしかない. 3章で議論します.</p>
+</div>
+<div class="footnote-definition" id="105"><sup class="footnote-definition-label">5</sup>
+<p>GitHub issue での報告やテストの追加などお待ちしております.</p>
+</div>
+<div class="footnote-definition" id="106"><sup class="footnote-definition-label">6</sup>
+<p>「これって既にある crate <a href="https://crates.io/crates/delegate"><code>delegate</code></a> ですよね?」アイデア元はそう. 2章と3章で議論します.</p>
+</div>
+<div class="footnote-definition" id="107"><sup class="footnote-definition-label">7</sup>
+<p>「これって既にある crate <a href="https://crates.io/crates/portrait"><code>portrait</code></a> ですよね?」結果的にはそう. 2章と3章で議論します.</p>
+</div>
+<div class="footnote-definition" id="108"><sup class="footnote-definition-label">8</sup>
+<p>このあたりの niri と sabiniwm の比較はまた別の記事で. enum でという点では似ていますがそこそこ違います.</p>
+</div>
+<div class="footnote-definition" id="109"><sup class="footnote-definition-label">9</sup>
+<p>この分岐は分岐予測でほぼ 100% 当たるから feature flag で消すのは趣味でしかないですね. most-inner loop でもないだろうし. まぁデモンストレーションだと思ってください.</p>
+</div>
+<div class="footnote-definition" id="110"><sup class="footnote-definition-label">10</sup>
+<p>推測ですが, smithay がこうしているのは当時複雑な trait bound に対して enum を delegation できる crate がなかったのが要因のひとつでしょう. (しらんけど)
+パワーで解決できるところはパワーで解決してこだわらない. それもまた正解ですしね.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

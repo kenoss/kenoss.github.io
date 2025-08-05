@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+crate thin_delegate を書いた (2&#x2F;4) | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="crate thin_delegate を書いた (2&#x2F;4)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-01-03-thin_delegate-2&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">crate thin_delegate を書いた (2&#x2F;4)</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-01-03" class="post-date" itemprop="datePublished">
+                2025-01-03
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 thin_delegate</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <ul>
+<li><a href="../2025-01-02-thin_delegate-1">1章: <code>thin_delegate</code> の紹介</a></li>
+<li><a href="../2025-01-03-thin_delegate-2">2章: proc macro 間での情報伝達と delegation crate 比較</a>
+<ul>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#problem-definition-share-data-between-proc-macro">問題: proc macro 間での情報伝達</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#enum-dispatch"><code>enum_dispatch</code></a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/#local-state-for-proc-macro">閑話休題: proc macro で過激なことをやりたい</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#enum-delegate-v0.2.0"><code>enum_delegate</code> v0.2.0</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#auto-delegate"><code>auto-delegate</code></a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#enum-delegate-v0.3.0"><code>enum_delegate</code> v0.3.0</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#ambassador"><code>ambassador</code></a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#portrait"><code>portrait</code></a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#delegate"><code>delegate</code></a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#delegate-attr"><code>delegate-attr</code></a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-03-thin_delegate-2/./#summary">2章まとめ</a></li>
+</ul>
+</li>
+<li><a href="../2025-01-04-thin_delegate-3">3章: <code>thin_delegate</code> の設計と実装</a></li>
+<li><a href="../2025-01-05-thin_delegate-4">4章: まとめ</a></li>
+</ul>
+<h2 id="2zhang-proc-macro-jian-denoqing-bao-chuan-da-to-delegation-crate-bi-jiao">2章: proc macro 間での情報伝達と delegation crate 比較</h2>
+<p>1章では基本的な使い方を見ました.
+この章ではいくつかの技術的な課題のうち, 最も重要な <strong>proc macro 間での情報伝達方法</strong> を扱います.
+またそれに伴い, <strong>既存の delegation 系 crate の比較</strong> も行います.</p>
+<p>構文的な良し悪しはこの章では判断しません. 3章でまとめて扱います.</p>
+<h3 id="problem-definition-share-data-between-proc-macro">問題: proc macro 間での情報伝達</h3>
+<p>thin_delegate の基本的な使い方は以下の様なものでした.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>] </span><span style="color:#65737e;">// (1-2)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>] </span><span style="color:#65737e;">// (1-3)
+</span><span style="color:#b48ead;">struct </span><span>Window {
+</span><span>    </span><span style="color:#bf616a;">rect</span><span>: Rect,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>]
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Window {} </span><span style="color:#65737e;">// (1-4)
+</span></code></pre>
+<p>(1-2) で trait <code>ScoledShape</code>, (1-3) で struct <code>Window</code> の情報を覚え, (1-4) でこれらの情報を利用してメソッドを自動実装しています.
+つまり, <strong>複数の proc macro 間で trait や型に紐付く情報を伝達</strong>しています.
+また, この問題は <strong>外部 crate の trait の扱い</strong> も要素として絡んできます.</p>
+<p>さて, これはどうやるのでしょうか?</p>
+<p>この問題へのアプローチ方法は crate 毎に異なります. なので既存の具体的な crate を挙げ, それの実装方針を見ることにしましょう.</p>
+<h3 id="enum-dispatch"><code>enum_dispatch</code></h3>
+<ul>
+<li><a href="https://crates.io/crates/enum_dispatch">crates.io</a></li>
+<li><a href="https://gitlab.com/antonok/enum_dispatch">repository</a></li>
+<li><a href="https://docs.rs/enum_dispatch/latest/enum_dispatch">doc</a></li>
+<li>Initial commit: 2018/12</li>
+</ul>
+<p>enum_dispatch は (僕が知る限り) trait method の自動 delegation を扱った最古の crate です.
+crates.io で daily (?) ダウンロード35k越えで, Twitter でも度々目にします. 自分もこれを最初に手に取りました.</p>
+<p>enum_dispatch の基本的な使い方は以下です.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">enum_dispatch</span><span>::</span><span style="color:#bf616a;">enum_dispatch</span><span>] </span><span style="color:#65737e;">// (2-1)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">enum_dispatch</span><span>::</span><span style="color:#bf616a;">enum_dispatch</span><span>(ShapeI)] </span><span style="color:#65737e;">// (2-2)
+</span><span style="color:#b48ead;">enum </span><span>Shape {
+</span><span>    Rect(Rect),
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> rect = Rect { width: </span><span style="color:#d08770;">2.0</span><span>, height: </span><span style="color:#d08770;">3.0 </span><span>};
+</span><span>    assert_eq!(rect.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">6.0</span><span>);
+</span><span>    </span><span style="color:#b48ead;">let</span><span> shape = Shape::Rect(rect);
+</span><span>    assert_eq!(shape.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">6.0</span><span>);
+</span><span>}
+</span></code></pre>
+<p>(2-1) で trait 定義の情報を登録し, (2-2) で enum 定義と自動 delegation を同時に行っています.
+thin_delegate の様に <code>impl</code> は不要です. また, trait と enum の順番を変えることもできます.</p>
+<p>この情報伝達は
+<strong>proc macro crate 中の global variables に文字列化した trait/enum の定義を保存する</strong>
+ことによって行われます. より詳細には <sup class="footnote-reference"><a href="#201">1</a></sup>:</p>
+<ol>
+<li>(2-1) の trait <code>ShapeI</code> に対する <code>enum_dispatch::enum_dispatch</code> 呼び出しにおいて,
+trait <code>ShapeI</code> の token stream を文字列化したものを <code>HashMap</code> <code>TRAIT_DEFS</code> に保存する
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/lib.rs?ref_type=tags#L378">code</a>]
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/cache.rs?ref_type=tags#L38-39"><code>TRAIT_DEFS</code></a>].
+このとき generics の情報も一部 <code>HashMap</code> のキーとして含める
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/cache.rs?ref_type=tags#L49-50">code</a>].</li>
+<li>(2-2) の enum <code>Shape</code> に対する <code>enum_dispatch::enum_dispatch</code> 呼び出しにおいて,
+enum <code>Shape</code> の token stream を文字列化したものを <code>HashMap</code> <code>ENUM_DEFS</code> に保存する
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/lib.rs?ref_type=tags#L382">code</a>]
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/cache.rs?ref_type=tags#L40-41"><code>ENUM_DEFS</code></a>].
+このとき generics の情報も一部 <code>HashMap</code> のキーとして含める
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/cache.rs?ref_type=tags#L59-60">code</a>].</li>
+<li>(2-1), (2-2) で引数として enum/trait 名が与えられていた場合 (上では (2-2)), その組が両方定義されていれば自動 delegation する.
+そうでなければ <sup class="footnote-reference"><a href="#201">1</a></sup> defer する
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/lib.rs?ref_type=tags#L421-430">code</a>].</li>
+<li>(2-1), (2-2) で defer した組が解決されたとき, 自動 delegation する <sup class="footnote-reference"><a href="#202">2</a></sup>
+[<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/lib.rs?ref_type=tags#L440-457">code</a>].</li>
+</ol>
+<p>最初にこの処理を見たときは感動しました. 「これって合法なんだ!!」と.
+でも実は合法ではありませんでした.</p>
+<p><a href="https://users.rust-lang.org/t/what-do-you-suggest-proc-macros-to-be-aware-of-each-other-as-opposed-to-a-static-variable/77160/6">What do you suggest proc macros to be aware of each other as opposed to a static variable?</a>
+から引用:</p>
+<blockquote>
+<p>bjorn3<br />
+Jun 2022</p>
+<p>Proc macros should be expandable independently and without any side effects. We don't offer any guarantees around the order and amount of times a proc macro is expanded. For example rust-analyzer will only re-expand proc macros if you change the actual invocation of the proc macro. Rustc could also start caching proc macro outputs in the future I think.</p>
+</blockquote>
+<p>意約:</p>
+<blockquote>
+<p>proc macro は副作用を持たずに独立して展開されるべきです.
+proc macro の展開においてその順序も呼び出し回数も何も保証されません.
+例えば rust-analyzer は proc macro の呼び出し箇所の変更毎に再展開されます.
+将来的には rustc が proc macro 出力をキャッシュすることも考えられます <sup class="footnote-reference"><a href="#203">3</a></sup>.</p>
+</blockquote>
+<p>これに照らして上記の方法を評価してみましょう.</p>
+<ul>
+<li>そもそも proc macro 呼び出し時 global variable がどういう状態か何も保証されていない.
+(例えば呼び出し毎に新しいプロセスを起動するのはコンパイラの挙動として合法.)
+以下では状態が保存されていて一部 rustc と挙動が違うと仮定する.</li>
+<li>順序不定: defer していることにより trait/enum の順序が逆になっても問題ない (はず).</li>
+<li>複数回呼び出し: <code>cache_trait()</code>, <code>cache_enum_dispatch()</code> は
+<a href="https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.insert"><code>HashMap::insert()</code></a>
+を利用しており, key が重複する場合は更新されるので中身の変更は大丈夫 (なはず).
+trait/enum 名や型パラメータを弄った場合は古い定義が別エントリとして残るので駄目.
+また, (2-2) -&gt; (2-1) -&gt; (2-1) で評価された場合最初の (2-1) で defer が
+<a href="https://gitlab.com/antonok/enum_dispatch/-/blob/v0.3.13/src/cache.rs?ref_type=tags#L131-134">消費</a>
+されているから駄目 (なはず) <sup class="footnote-reference"><a href="#204">4</a></sup>.</li>
+<li>キャッシュ: キャッシュ単体で異常ケースはない気がする? (まぁでも副作用なしという重大な前提条件が満たされていないので...)</li>
+</ul>
+<p>...と, 全体的によろしくないです.</p>
+<hr />
+<p>ふたつめの enum_dispatch の良くない部分として, 外部 crate の trait をサポートしていないということが挙げられます.</p>
+<p>ある crate で <code>enum_dispatch::enum_dispatch</code> を使い
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/src/lib.rs">1</a>],
+別の crate で同じ identifier に対して使っても
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/pass_basic.rs">2</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/pass_def_in_other_mod_without_arg_incorrect.rs">3</a>]
+それ自体ではエラーにはなりません.
+一方, 同一 crate 内で同じ identifier に対して使うと意図せぬ挙動になります
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_def_in_other_mod_with_arg.rs">4 rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_def_in_other_mod_with_arg.stderr">4 stdeerr</a>].</p>
+<p>このエラーは trait/enum の identifier (名前) を <code>HashMap</code> のキーとして利用し, それを module 毎に区別していないのが原因です.
+(実装がナイーヴすぎる.)</p>
+<p>この差は compilation unit (crate) を跨いでいるときに global variable を引き継いでいないからだと思われます <sup class="footnote-reference"><a href="#205">5</a></sup>.
+逆に言えば, <strong>引き継げない</strong> ということでもあります.</p>
+<p>というわけで, <strong>global variable を使う方法では異なる proc macro 間で情報を伝達できません</strong>.</p>
+<hr />
+<p>みっつめ. generics や trait bound などのサポートが弱い.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>Rect&lt;T&gt; {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: T,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: T,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">enum_dispatch</span><span>::</span><span style="color:#bf616a;">enum_dispatch</span><span>]
+</span><span style="color:#b48ead;">enum </span><span>Shape&lt;T&gt; {
+</span><span>    Rect(Rect&lt;T&gt;),
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">enum_dispatch</span><span>::</span><span style="color:#bf616a;">enum_dispatch</span><span>(Shape&lt;usize&gt;)] </span><span style="color:#65737e;">// (2-3)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl</span><span>&lt;T&gt; ShapeI </span><span style="color:#b48ead;">for </span><span>Rect&lt;T&gt;
+</span><span style="color:#b48ead;">where
+</span><span>    T: std::ops::Mul,
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        (</span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height) as </span><span style="color:#b48ead;">f64
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>これで (2-3) で以下の様なコードが生成され,</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl</span><span>&lt;T&gt; ShapeI </span><span style="color:#b48ead;">for </span><span>Shape&lt;T&gt; {
+</span><span>    #[</span><span style="color:#bf616a;">inline</span><span>]
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#b48ead;">match </span><span style="color:#bf616a;">self </span><span>{
+</span><span>            Shape::Rect(inner) =&gt; ShapeI::area(inner),
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p><code>T: std::ops::Mul</code> という制約が付いていないのでエラー
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_generics.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_generics.stderr">stderr</a>]
+になります.</p>
+<p>これは単純に実装の問題です. 3章で議論します.</p>
+<hr />
+<h4 id="enum-dispatch-matome"><code>enum_dispatch</code> まとめ</h4>
+<ul>
+<li>enum_dispatch は <strong>proc macro crate 中の global variables に文字列化した trait/enum の定義を保存する</strong>
+ことで proc macro 間で情報伝達しているが, この方法は根本的な問題がある.</li>
+<li>外部 crate の trait/enum 定義を扱えない.</li>
+<li>generics や trait bound のサポートが弱い.</li>
+<li>エラーがわかりにくい
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_implicit_error_if_typo.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_implicit_error_if_typo.stderr">stderr</a>].
+軽率に panic する
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_panic_if_struct.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_panic_if_struct.stderr">stderr</a>].</li>
+</ul>
+<p>というわけで <code>enum_dispatch</code> は個人的にはおすすめしません. R.I.P. <sup class="footnote-reference"><a href="#206">6</a></sup> <sup class="footnote-reference"><a href="#207">7</a></sup></p>
+<h3 id="local-state-for-proc-macro">閑話休題: proc macro で過激なことをやりたい</h3>
+<p>人間の欲求は底なしです.
+「こうしたい」「ここでこれが使えればこれが作れるのに」「合法じゃないけど限定的に動作するものを作ってみた」
+くらいならどんどん言ったりやったりしていくのが良いと思います.</p>
+<p>今回のテーマである自動 delegation という文脈から少し外れますが, 「もっと一般に情報伝達したい」「状態を持ちたい」
+という要望はちらほらと上がっています. 目に入ったものを挙げていきます.</p>
+<ul>
+<li><a href="https://users.rust-lang.org/t/what-do-you-suggest-proc-macros-to-be-aware-of-each-other-as-opposed-to-a-static-variable/77160">What do you suggest proc macros to be aware of each other as opposed to a static variable?</a></li>
+<li><a href="https://github.com/rust-lang/rust/issues/44034">Crate local state for procedural macros?</a></li>
+<li><a href="https://stackoverflow.com/questions/52910783/is-it-possible-to-store-state-within-rusts-procedural-macros">Is it possible to store state within Rust's procedural macros?</a></li>
+<li>ちょっとオフトピだけど <a href="https://github.com/rust-lang/rust/issues/54363">proc macro 中で $crate を使いたい</a>
+ために <a href="https://github.com/bkchr/proc-macro-crate/blob/master/src/lib.rs">Cargo.toml を読んでるやつ</a>.</li>
+</ul>
+<p>では自動 delegation は合法的には無理なのでしょうか? 実は合法的に実現する方法があります.</p>
+<h3 id="enum-delegate-v0.2.0"><code>enum_delegate</code> v0.2.0</h3>
+<ul>
+<li><a href="https://crates.io/crates/enum_delegate">crates.io</a></li>
+<li><a href="https://gitlab.com/dawn_app/enum_delegate">repository</a></li>
+<li><a href="https://docs.rs/enum_delegate/0.2.0/enum_delegate">doc</a></li>
+<li>Initial commit: 2022/10</li>
+</ul>
+<p>enum_delegate は enum_dispatch を改善した crate (だったもの) です.
+しかし <a href="https://gitlab.com/dawn_app/enum_delegate/-/issues/6">この PR</a> でデザインが根本的に変わりました.
+なのでまず v0.2.0 までの話をします.</p>
+<p><a href="https://docs.rs/enum_delegate/0.2.0/enum_delegate/#comparison-with-enum_dispatch">doc -- Comparison with enum_dispatch</a>
+と
+<a href="https://gitlab.com/dawn_app/enum_delegate/tree/f5bcaf45#enum_dispatch">README</a>
+には以下の点が差分として挙げられています.</p>
+<ul>
+<li>enum_dispatch は enum のみサポートするが, enum_delegate は <strong>enum/struct with a field</strong> をサポートする.</li>
+<li><strong>外部 crate の trait</strong> をサポート</li>
+<li>より良いエラー
+(なんとちゃんと <a href="https://gitlab.com/dawn_app/enum_delegate/-/tree/0.2.0/tests_error">failure case のテスト</a> がある!)</li>
+<li>Associated types サポート</li>
+</ul>
+<p>使い方は enum_dispatch に近いです.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">enum_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]          </span><span style="color:#65737e;">// (2-4)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">enum_delegate</span><span>::</span><span style="color:#bf616a;">implement</span><span>(ShapeI)] </span><span style="color:#65737e;">// (2-5)
+</span><span style="color:#b48ead;">enum </span><span>Shape {
+</span><span>    Rect(Rect),
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> rect = Rect { width: </span><span style="color:#d08770;">2.0</span><span>, height: </span><span style="color:#d08770;">3.0 </span><span>};
+</span><span>    assert_eq!(rect.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">6.0</span><span>);
+</span><span>    </span><span style="color:#b48ead;">let</span><span> shape = Shape::Rect(rect);
+</span><span>    assert_eq!(shape.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">6.0</span><span>);
+</span><span>}
+</span></code></pre>
+<h4 id="enum-delegate-noqing-bao-chuan-da-fang-fa"><code>enum_delegate</code> の情報伝達方法</h4>
+<p>情報伝達の仕組みは <a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/How%20Does%20it%20Work.md">How Does it Work.md</a>
+で解説されています. 以下で解説します.</p>
+<p>自動 delegation のためには</p>
+<ul>
+<li>trait <code>Trait</code> の path</li>
+<li>trait <code>Trait</code> の定義</li>
+<li>struct/enum <code>StructEnum</code> の path</li>
+<li>struct/enum <code>StructEnum</code> の定義</li>
+</ul>
+<p>が必要です.</p>
+<p>定義があっても path は得られないことに注意してください.<br />
+proc macro はコンパイルのかなり早いフェーズで展開されます. なので基本的に使えるのは字句情報 (<code>TokenStream</code>) のみです.
+あるトークンが型なのか trait なのか変数なのかや, 事前に <code>use</code> されて別の module/crate を参照しているのかどうかなどはわかりません.
+一方で <code>impl path::to::Trait for path::of::StuctEnum { ... }</code> を生成するためには trait と struct/enum の path を
+どこかしらから得る必要があります. <code>enum_delegate::implement</code> の場合は trait の path は引数で与えられます. struct/enum の path は
+この macro は struct/enum の定義に付けるという設計から ident <code>StructEnum</code> をそのまま使えばよいです:
+<code>impl path::to::Trait for StuctEnum { ... }</code>.</p>
+<p>残りは trait の定義のみです. enum_delegate は <strong>proc macro 中で decl macro を経由する</strong> ことで proc macro 間で情報を伝達します.</p>
+<p>上記の例では以下が起こります:</p>
+<ol>
+<li>(2-4) の trait <code>ShapeI</code> に対する <code>#[enum_delegate::register]</code> 呼び出しにおいて,
+trait <code>ShapeI</code> の他に decralative macro <code>ShapeI</code> を定義する. (後述)</li>
+<li>(2-5) の enum <code>Shape</code> に対する <code>#[enum_delegate::implement(ShapeI)]</code> 呼び出しにおいて,
+decl macro <code>ShapeI</code> を呼び出す
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/enum_delegate_lib/src/macros/implement.rs#L65">1</a>].
+ここで trait の定義を獲得する.</li>
+<li>その中で proc macro <code>enum_delegate::implement_trait_for_enum!{}</code> を呼び出す.
+これが <code>impl ShapeI for Shape { ... }</code> を生成する
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/src/lib.rs#L141">2</a>]
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/enum_delegate_lib/src/macros/implement_trait_for_enum.rs#L43">3</a>].</li>
+</ol>
+<p>decl macro <code>ShapeI</code> は
+<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/enum_delegate_lib/src/macros/implement.rs#L65">この様に定義</a> される:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>quote! {
+</span><span>    #[</span><span style="color:#bf616a;">doc</span><span>(hidden)]
+</span><span>    #[</span><span style="color:#bf616a;">macro_export</span><span>]
+</span><span>    macro_rules! #macro_name {
+</span><span>        (</span><span style="color:#bf616a;">$trait_path</span><span>: path, </span><span style="color:#bf616a;">$enum_path</span><span>: path, </span><span style="color:#bf616a;">$enum_declaration</span><span>: item) =&gt; {
+</span><span>            enum_delegate::implement_trait_for_enum!{
+</span><span>                </span><span style="color:#bf616a;">$trait_path</span><span>,
+</span><span>                #parsed_trait,
+</span><span>                </span><span style="color:#bf616a;">$enum_path</span><span>,
+</span><span>                </span><span style="color:#bf616a;">$enum_declaration
+</span><span>            }
+</span><span>        };
+</span><span>    }
+</span><span>
+</span><span>    #[</span><span style="color:#bf616a;">doc</span><span>(hidden)]
+</span><span>    </span><span style="color:#b48ead;">pub use </span><span>#macro_name as #trait_name;
+</span><span>
+</span><span>    #cleaned_trait
+</span><span>}
+</span></code></pre>
+<p>これは <code>(trait の path, struct/enum の path, struct/enum の定義)</code> を引数に取り,
+そこに trait の定義 <code>parsed_trait</code> を合わせて <code>enum_delegate::implement_trait_for_enum!{}</code>
+を呼び出しているだけである. (概ね)</p>
+<h4 id="he-gu-dong-kunoka">何故動くのか?</h4>
+<p>これは global variable を使う方法とは違い, 合法である. 何故だろうか?</p>
+<ul>
+<li>副作用がなく, 渡された <code>TokenStream</code> 以外の情報を使っていない.</li>
+<li>順序不定: <code>#[enum_delegate::implement(ShapeI)]</code> が先に呼び出されたとしても内側の decl macro <code>ShapeI</code>
+の展開はその定義の方が先に解決される (はず <sup class="footnote-reference"><a href="#208">8</a></sup>).</li>
+<li>複数回呼び出し: 副作用がないので大丈夫.</li>
+<li>キャッシュ: decl macro の定義が変更されれば適切に invalidate されると期待できる.</li>
+</ul>
+<h4 id="dehahe-gu-enum-delegate-debu-man-nanoka">では何故 <code>enum_delegate</code> で不満なのか?</h4>
+<p>少なくとも
+generics
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/tests_error/unsupported_generic.rs">rs</a>]
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/tests_error/unsupported_generic.stderr">stderr</a>],
+super trait
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/tests_error/unsupported_supertrait.rs">rs</a>]
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/tests_error/unsupported_supertrait.stderr">stderr</a>]
+<sup class="footnote-reference"><a href="#209">9</a></sup>,
+trait item
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/tests_error/unsupported_trait_item.rs">rs</a>]
+[<a href="https://gitlab.com/dawn_app/enum_delegate/-/blob/0.2.0/tests_error/unsupported_trait_item.stderr">stderr</a>]
+がサポートされていない <sup class="footnote-reference"><a href="#210">10</a></sup>.</p>
+<p>また, trait 定義が外部 crate にあり <code>#[enum_delegate::register]</code> を付けられないということは普通にあります.
+そのときは <code>enum_delegate::implement</code> に直接 trait 定義を食わせます
+[<a href="https://docs.rs/enum_delegate/0.2.0/enum_delegate/#3rd-party-traits">doc</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v020/pass_implement_extarnal_trait.rs">example</a>]:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">mod </span><span>external {
+</span><span>    </span><span style="color:#b48ead;">pub trait </span><span>ShapeI {
+</span><span>        </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">enum_delegate</span><span>::</span><span style="color:#bf616a;">implement</span><span>(
+</span><span>    external::ShapeI,
+</span><span>    trait ShapeI {
+</span><span>        fn </span><span style="color:#bf616a;">area</span><span>(&amp;self) -&gt; f64;
+</span><span>    }
+</span><span>)]
+</span><span style="color:#b48ead;">enum </span><span>Shape {
+</span><span>    Rect(Rect),
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>external::ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>これにはいくつか面倒なポイントがあります. 3章で再訪します.</p>
+<h4 id="enum-delegate-v0-2-0-matome"><code>enum_delegate</code> v0.2.0 まとめ</h4>
+<ul>
+<li>enum_delegate は <strong>proc macro 中で decl macro を経由する</strong> ことで proc macro 間で情報を伝達する.
+これは問題がない <sup class="footnote-reference"><a href="#211">11</a></sup>.</li>
+<li>generics や trait bound のサポートが弱い.</li>
+<li>外部 crate の trait の扱いが面倒.</li>
+</ul>
+<p>ありがとう <code>enum_delegate</code>, 勉強になったよ. でも別方向に行っちゃったんだよなぁ. R.I.P.</p>
+<h3 id="auto-delegate"><code>auto-delegate</code></h3>
+<ul>
+<li><a href="https://crates.io/crates/auto-delegate">crates.io</a></li>
+<li><a href="https://github.com/not-elm/auto-delegate">repository</a></li>
+<li><a href="https://docs.rs/auto-delegate/0.1.3/auto_delegate">doc</a></li>
+<li>Initial commit: 2023/05</li>
+</ul>
+<p>enum_delegate v0.3.0 の仕組みの解説の前に, より素朴な auto-delegate を取り上げます.</p>
+<p><a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/auto-delegate/pass_basic.rs">使い方</a>:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">auto_delegate</span><span>::</span><span style="color:#bf616a;">delegate</span><span>]         </span><span style="color:#65737e;">// (2-6)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(auto_delegate::Delegate)] </span><span style="color:#65737e;">// (2-7)
+</span><span>#[</span><span style="color:#bf616a;">to</span><span>(ShapeI)]
+</span><span style="color:#b48ead;">enum </span><span>Shape {
+</span><span>    Rect(Rect),
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<h4 id="qing-bao-chuan-da-noshi-zu-mi-impl-trait-for-auto-delegate-delegates">情報伝達の仕組み: <code>impl Trait for auto_delegate::Delegates&lt;...&gt;</code></h4>
+<p>auto-delegate は <strong><code>auto_delegate::Delegates&lt;...&gt;</code> という struct を介して自動 delegation する</strong>.</p>
+<p><a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/src/lib.rs#L6-L20">auto-delegate/src/lib.rs</a>:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">doc</span><span>(hidden)]
+</span><span style="color:#b48ead;">pub struct </span><span>Delegates&lt;A, B, C, D, E, F, G, H, I, J, K, L&gt;(
+</span><span>    pub Option&lt;A&gt;,
+</span><span>    pub Option&lt;B&gt;,
+</span><span>    pub Option&lt;C&gt;,
+</span><span>    pub Option&lt;D&gt;,
+</span><span>    pub Option&lt;E&gt;,
+</span><span>    pub Option&lt;F&gt;,
+</span><span>    pub Option&lt;G&gt;,
+</span><span>    pub Option&lt;H&gt;,
+</span><span>    pub Option&lt;I&gt;,
+</span><span>    pub Option&lt;J&gt;,
+</span><span>    pub Option&lt;K&gt;,
+</span><span>    pub Option&lt;L&gt;,
+</span><span>);
+</span></code></pre>
+<ol>
+<li>(2-6) で <code>#[auto_delegate::delegate]</code> すると <code>impl ShapeI for auto_delegate::Delegates&lt;...&gt;</code> が定義される.
+例えば receiver が <code>&amp;self</code> の場合:
+[<a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/impl/src/delegate_trait.rs#L65-L89">gen 1</a>]
+[<a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/impl/src/trait_meta/fn_meta.rs#L39">gen 2</a>]
+[<a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/impl/src/trait_meta/fn_meta.rs#L79-L82">gen 3</a>].
+(どこかひとつのフィールドのみ <code>Some</code> であることが仮定されている.)</li>
+<li>(2-7) で <code>#[derive(auto_delegate::Delegate)]</code> すると, <code>impl ShapeI for Shape</code> の中で <code>&amp;self</code> などを
+<code>auto_delegate::Delegates&lt;variant, ...&gt;</code> に変換し
+[<a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/impl/src/derive/enum.rs#L84-L91">enum</a>]
+[<a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/impl/src/derive/struct.rs#L124-L126">struct</a>],
+(2-6) の <code>#[auto_delegate::delegate]</code> で定義されていたメソッドを呼びだす
+[<a href="https://github.com/not-elm/auto-delegate/blob/v0.1.3/impl/src/trait_meta/fn_meta.rs#L107-L145">gen 4</a>].
+各 enum variant が <code>auto_delegate::Delegates</code> のフィールドに対応する <sup class="footnote-reference"><a href="#212">12</a></sup>.</li>
+</ol>
+<p>前のふたつとは異なり proc macro 間で <code>TokenStream</code> を受け渡すのではなく,
+<strong>rustc に型と関数呼び出しを解決させることにより trait と struct/enum を行き来している</strong> というのがキモである.
+proc macro はその御膳立てをしているにすぎない.</p>
+<p>この形式は <a href="https://github.com/rust-lang/rfcs/pull/2393#issuecomment-392248367">rfcs#2329 のコメント</a> (2018/05)
+で提案されています.</p>
+<h4 id="ping-jia">評価</h4>
+<p>この方法には致命的な欠点がみっつある.</p>
+<hr />
+<p>ひとつめ. delegatee が crate local に定義されている型でなければ trait の実装がコンフリクトすること
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/auto-delegate/fail_conflict_impl_trait_for_field.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/auto-delegate/fail_conflict_impl_trait_for_field.stderr">stderr</a>].</p>
+<p><code>#[auto_delegate::delegate] pub trait Hello {...}</code> の時点で生成される中継となる定義の基本形は次です:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl</span><span>&lt;DelegateImpl&gt; Hello </span><span style="color:#b48ead;">for </span><span>DelegateImpl
+</span><span style="color:#b48ead;">where
+</span><span>    DelegateImpl: auto_delegate::Delegatable&lt;</span><span style="background-color:#bf616a;color:#2b303b;">.</span><span>..&gt;,
+</span><span>    &lt;DelegateImpl as auto_delegate::Delegatable&lt;</span><span style="background-color:#bf616a;color:#2b303b;">..</span><span>.&gt;&gt;::A: Hello,
+</span><span>    ...
+</span><span>    &lt;DelegateImpl as auto_delegate::Delegatable&lt;</span><span style="background-color:#bf616a;color:#2b303b;">..</span><span>.&gt;&gt;::L: Hello,
+</span></code></pre>
+<p>これと自分で定義した <code>impl Hello for String</code> がコンフリクトします.
+(将来的に auto_delegate が <code>impl DelegateImpl for String</code> する可能性があるため rustc はこれを reject せざるを得ない.)</p>
+<hr />
+<p>ふたつめ. 外部 crate の trait に対して後付けできない.</p>
+<p>struct/enum が crate 内で定義されていたとしても, この仕組みでは <code>impl external::Trait for auto_delegate::Delegates&lt;...&gt;</code>
+を経由せざるを得ません. trait <code>external::Trait</code> に対して <code>external</code> 側では <code>#[auto_delegate::delegate]</code> が付けられていない場合
+(enum_delegate で trait 定義を直書きしているケース), この双方は non local であり特殊な場合を除き
+<a href="https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence">orphan rule</a>
+に反します.</p>
+<hr />
+<p>みっつめ. macro 展開結果がかなり読み難いということ
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/auto-delegate/pass_basic.rs">example</a>].</p>
+<p>これは単に読み難いというだけの問題ではない. 例えばエラーが出たときに (proc macro やこの仕組みを知っているとは限らない)
+ユーザーが解決しやすいわかりやすいメッセージが出せないといった practical な問題を孕んでいる.
+(例えば上のコンフリクトしているケース
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/auto-delegate/fail_conflict_impl_trait_for_field.stderr">stderr</a>]
+でエラーメッセージからどうすれば解決できるのか, そもそも解決可能なのかがわかるだろうか?
+もちろん <code>cargo expand</code> して実装を読めばわかるが, それは最終手段である.)</p>
+<hr />
+<p>あと致命的と言うべきかはわかりませんが, 全体的に柔軟性に欠けます.
+例えば associated type は第一 variant のものを使っています
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/auto-delegate/fail_not_supported_associated_const.rs">rs</a>].
+しかし associated type はともかく (enum variant 毎に違っているものを纏めたいケースを思いつかない) associated const は delegator 側で新しく定義するユースケースが出てくることを否定できません.
+少なくとも外部 crate で trait が定義されていて associated const を持つケースにエスケープハッチを開けておく必要があります.
+(想定されているケースが素朴すぎる. 現場で使われるためには完璧なものかダクトテープで運用できるものが求められる.)</p>
+<h4 id="auto-delegate-matome"><code>auto-delegate</code> まとめ</h4>
+<ul>
+<li><code>impl</code> がコンフリクトするケースがある.</li>
+<li>外部 crate の trait が扱えない.</li>
+<li>生成されるコードが非自明.</li>
+<li>柔軟性に欠ける.</li>
+</ul>
+<p>仕組みの制約がきつすぎる. 黒魔術を使うならその原理をドキュメントに書いてほしい. R.I.P. <sup class="footnote-reference"><a href="#213">13</a></sup></p>
+<h3 id="enum-delegate-v0.3.0"><code>enum_delegate</code> v0.3.0</h3>
+<ul>
+<li><a href="https://crates.io/crates/enum_delegate">crates.io</a></li>
+<li><a href="https://gitlab.com/dawn_app/enum_delegate">repository</a></li>
+<li>doc: not yet released new version.</li>
+<li>commit: 2022/12 <sup class="footnote-reference"><a href="#214">14</a></sup></li>
+</ul>
+<p>この <a href="https://gitlab.com/dawn_app/enum_delegate/-/issues/6">issue</a> でデザインが根本的に変更された.</p>
+<ul>
+<li>generics がサポートされている.</li>
+<li>super trait がサポートされていない
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v030/fail_not_supported_super_trait.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v030/fail_not_supported_super_trait.stderr">stderr</a>]
+<sup class="footnote-reference"><a href="#215">15</a></sup>.</li>
+<li>associated type/const がサポートされていない
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v030/fail_not_supported_associated_const.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v030/fail_not_supported_associated_const.stderr">stderr</a>]
+<sup class="footnote-reference"><a href="#216">16</a></sup></li>
+</ul>
+<h4 id="shi-zu-mitoping-jia">仕組みと評価</h4>
+<p><code>auto-delegate</code> に似ているが, struct ではなく
+<code>enum_dispatch::Either&lt;A, enum_dispatch::Either&lt;B, ...enum_dispatch::Either&lt;X, enum_dispatch::Void&gt;&gt;&gt;</code>
+に変換する
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v030/pass_basic.rs">example</a>].</p>
+<p>auto-delegate とのこの違いにより, std types は
+<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_delegate_v030/pass_supported_std_types.rs">サポートされている</a>.
+<code>impl Hello for enum_dispatch::Either&lt;String, enum_dispatch::Void&gt;</code> になるため.
+(<code>Hello</code> 側は <code>enum_dispatch</code> 側に見えないので auto-delegate の様な問題は起こらない.)
+外部 crate の trait が orphan rule にひっかかる点は同じ. (<code>enum_dispatch::Either&lt;A, ...&gt;</code> は local ではないので.)
+super trait は真面目にやればできるかも.</p>
+<p><a href="https://gitlab.com/dawn_app/enum_delegate/-/issues/6#note_1189900264">最適化はされるらしい</a> <sup class="footnote-reference"><a href="#217">17</a></sup>.</p>
+<h4 id="enum-delegate-v0-3-0-matome"><code>enum_delegate</code> v0.3.0 まとめ</h4>
+<p>auto-delegate と同じ. 読めないし制約がきつすぎる.</p>
+<h3 id="ambassador"><code>ambassador</code></h3>
+<ul>
+<li><a href="https://crates.io/crates/ambassador">crates.io</a></li>
+<li><a href="https://github.com/hobofan/ambassador">repository</a></li>
+<li><a href="https://docs.rs/ambassador/0.4.1/ambassador">doc</a> <sup class="footnote-reference"><a href="#218">18</a></sup></li>
+<li>Initial commit: 2019/11 <sup class="footnote-reference"><a href="#219">19</a></sup></li>
+</ul>
+<p>ambassador は enum_dispatch に継いで古くからある crate で, 機能的には最もカバー範囲が広いです.
+一方で考えられる全てをカバーしようとしており構文的には複雑なものになっています.</p>
+<p>ここでは全てを紹介することはせず, 簡潔にだけ纏めておきます. 詳細は README やドキュメントを参照してください.</p>
+<ul>
+<li>generics サポート [<a href="https://github.com/hobofan/ambassador/tree/0.3.5?tab=readme-ov-file#delegateshoutx---trait-generics">REDAME</a>]</li>
+<li>trait bound サポート [<a href="https://github.com/hobofan/ambassador/tree/0.3.5?tab=readme-ov-file#delegate-where--a-shout---where-key">README</a>]</li>
+<li>外部 crate の trait サポート
+<ul>
+<li>外部 crate 側で ambassador を使っている場合
+[<a href="https://docs.rs/ambassador/0.4.1/ambassador/#cross-module-uses">doc</a>]</li>
+<li>外部 crate 側で ambassador を使っていない場合
+[<a href="https://github.com/hobofan/ambassador/tree/0.3.5?tab=readme-ov-file#for-remote-traits-delegatable_trait_remote">README</a>]</li>
+</ul>
+</li>
+<li>外部 crate の struct も扱える [<a href="https://github.com/hobofan/ambassador/tree/0.3.5?tab=readme-ov-file#for-remote-types-delegate_remote">README</a>]</li>
+<li>trait のメソッドが receiver 以外の引数を取ってもよい</li>
+<li>複数 field を持つ struct のサポート [<a href="https://github.com/hobofan/ambassador/tree/0.3.5?tab=readme-ov-file#delegate-target--foo---target-key">README</a>]</li>
+</ul>
+<h4 id="shi-zu-mi">仕組み</h4>
+<p>基本的には enum_delegate と同じく, proc macro 中で decl macro を定義/利用しています
+[<a href="https://github.com/hobofan/ambassador/blob/0.3.5/ambassador/src/register.rs#L69-L106">in <code>#[ambassador::derigatable_trait]</code></a>]
+[<a href="https://github.com/hobofan/ambassador/blob/0.3.5/ambassador/src/derive.rs#L199-L208">in <code>#[derive(ambassador::Delegate)</code></a>].
+derive する際に enum_delegate は proc macro -&gt; decl macro -&gt; proc macro と処理をしていましたが,
+ambassador は proc macro -&gt; decl macro だけでコードを生成しています.
+これを可能にするため, ambassador の decl macro は先にパーツ単位に加工しておき, 呼び出し側でそれらを別個に取り出す形になっています.</p>
+<h4 id="shi-zu-minoping-jia">仕組みの評価</h4>
+<p>あんまり差がないので省略.</p>
+<p>個人的には proc macro -&gt; decl macro で処理している分煩雑になっていると思う. 4章でちらっと触れます.</p>
+<h4 id="ambassador-matome"><code>ambassador</code> まとめ</h4>
+<ul>
+<li>仕組み: proc macro 中で decl macro を使う.</li>
+<li>機能的にカバー範囲が広い.</li>
+</ul>
+<p>たぶんおすすめです <sup class="footnote-reference"><a href="#220">20</a></sup>.</p>
+<h3 id="portrait"><code>portrait</code></h3>
+<ul>
+<li><a href="https://crates.io/crates/portrait">crates.io</a></li>
+<li><a href="https://github.com/SOF3/portrait">repository</a></li>
+<li><a href="https://docs.rs/portrait/0.3.0/portrait">doc</a></li>
+<li>Initial commit: 2023/01</li>
+</ul>
+<p>portrait は enum をサポートしていませんが一応取り上げておきます.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">portrait</span><span>::</span><span style="color:#bf616a;">make</span><span>]
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>RectWrapper(Rect);
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">portrait</span><span>::</span><span style="color:#bf616a;">fill</span><span>(portrait::</span><span style="color:#bf616a;">delegate</span><span>(Rect; self.0))]
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>RectWrapper {}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>proc macro の中に proc macro を記述するという独特なスタイルです. <code>portrait::delegate</code> の部分にはこれ以外も書くことができます
+[<a href="https://docs.rs/portrait/0.3.0/portrait/#provided-fillers">doc</a>].</p>
+<p>また, <strong>attribute を struct/enum の定義ではなく <code>impl Trait for Struct</code> に付ける</strong> というのも他にはない特徴です.
+3章で議論します.</p>
+<p>この形式は <a href="https://github.com/rust-lang/rfcs/pull/2393#issuecomment-394498215">rfcs#2329 のコメント</a> (2018/06)
+で提案されています.</p>
+<h4 id="shi-zu-mitoping-jia-1">仕組みと評価</h4>
+<p>情報伝達の仕組みは殆ど enum_delegate v0.2.0 と同じです.
+proc macro -&gt; decl macro -&gt; proc macro で処理をしています.</p>
+<h4 id="portrait-matome"><code>portrait</code> まとめ</h4>
+<ul>
+<li>仕組み: proc macro 中で decl macro を使う.</li>
+<li>delegation 以外もできる.</li>
+<li>enum をサポートしない.</li>
+<li>テストが少ない.</li>
+</ul>
+<p>評価対象外 <sup class="footnote-reference"><a href="#221">21</a></sup>.</p>
+<h3 id="delegate"><code>delegate</code></h3>
+<ul>
+<li><a href="https://crates.io/crates/delegate">crates.io</a></li>
+<li><a href="https://github.com/kobzol/rust-delegate">repository</a></li>
+<li><a href="https://docs.rs/delegate/0.13.1/delegate">doc</a></li>
+<li>Initial commit: 2018/05</li>
+</ul>
+<p>「Rust で delegation といったらこれ」くらいの認知度を誇る crate です.
+この記事でターゲットとしている自動 delegation ではないのですが, thin_delegate が大きく影響されているので取り上げます.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">enum </span><span>Shape {
+</span><span>    Rect(Rect),
+</span><span>    Circle { circle: Circle, center: (</span><span style="color:#b48ead;">f64</span><span>, </span><span style="color:#b48ead;">f64</span><span>) }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>Shape { </span><span style="color:#65737e;">// or `impl ShapeI for Shape` for `area()`.
+</span><span>    delegate::delegate! {
+</span><span>        to </span><span style="color:#b48ead;">match </span><span style="color:#bf616a;">self </span><span>{
+</span><span>            </span><span style="color:#b48ead;">Self</span><span>::Rect(x) =&gt; x,
+</span><span>            </span><span style="color:#b48ead;">Self</span><span>::Circle { circle, .. } =&gt; circle,
+</span><span>        }
+</span><span>        {
+</span><span>            </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>        }
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">center</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; (</span><span style="color:#b48ead;">f64</span><span>, </span><span style="color:#b48ead;">f64</span><span>) {
+</span><span>        </span><span style="color:#b48ead;">match </span><span style="color:#bf616a;">self </span><span>{
+</span><span>            </span><span style="color:#b48ead;">Self</span><span>::Rect(_) =&gt; unimplemented!(),
+</span><span>            </span><span style="color:#b48ead;">Self</span><span>::Circle { center, .. } =&gt; center.</span><span style="color:#96b5b4;">clone</span><span>(),
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Circle {
+</span><span>    </span><span style="color:#bf616a;">radius</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Circle {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#d08770;">3.14 </span><span>* </span><span style="color:#bf616a;">self</span><span>.radius * </span><span style="color:#bf616a;">self</span><span>.radius
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> rect = Rect { width: </span><span style="color:#d08770;">2.0</span><span>, height: </span><span style="color:#d08770;">3.0 </span><span>};
+</span><span>    assert_eq!(rect.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">6.0</span><span>);
+</span><span>    </span><span style="color:#b48ead;">let</span><span> shape = Shape::Rect(rect);
+</span><span>    assert_eq!(shape.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">6.0</span><span>);
+</span><span>    </span><span style="color:#b48ead;">let</span><span> circle = Circle { radius: </span><span style="color:#d08770;">2.0 </span><span>};
+</span><span>    assert_eq!(circle.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">12.56</span><span>);
+</span><span>    </span><span style="color:#b48ead;">let</span><span> shape = Shape::Circle { circle, center: (</span><span style="color:#d08770;">0.0</span><span>, </span><span style="color:#d08770;">0.0</span><span>) };
+</span><span>    assert_eq!(shape.</span><span style="color:#96b5b4;">area</span><span>(), </span><span style="color:#d08770;">12.56</span><span>);
+</span><span>    assert_eq!(shape.</span><span style="color:#96b5b4;">center</span><span>(), (</span><span style="color:#d08770;">0.0</span><span>, </span><span style="color:#d08770;">0.0</span><span>));
+</span><span>}
+</span></code></pre>
+<p>見ての通りですが, delegate は柔軟性に特化しており, trait method の delegation に縛られません.
+その代わり, メソッドの列挙は手動で行う必要があります.</p>
+<p>また, <a href="https://github.com/kobzol/rust-delegate?tab=readme-ov-file#features">豊富な機能</a> があるようです <sup class="footnote-reference"><a href="#222">22</a></sup>.</p>
+<h4 id="shi-zu-mitoping-jia-2">仕組みと評価</h4>
+<p>N/A</p>
+<h4 id="delegate-matome"><code>delegate</code> まとめ</h4>
+<p>たぶんおすすめです.</p>
+<h3 id="delegate-attr"><code>delegate-attr</code></h3>
+<ul>
+<li><a href="https://crates.io/crates/delegate-attr">crates.io</a></li>
+<li><a href="https://github.com/upsuper/delegate-attr">repository</a></li>
+<li><a href="https://docs.rs/delegate-attr/0.3.0/delegate_attr">doc</a></li>
+<li>Initial commit: 2020/05</li>
+</ul>
+<p>この記事でターゲットとしている自動 delegation ではないのですが目に入ったので一応取り上げておきます.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>RectWrapper(Rect);
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">delegate_attr</span><span>::</span><span style="color:#bf616a;">delegate</span><span>(self.0)]
+</span><span style="color:#b48ead;">impl </span><span>RectWrapper {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{}
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<h4 id="shi-zu-mitoping-jia-3">仕組みと評価</h4>
+<p>N/A</p>
+<h4 id="delegate-attr-matome"><code>delegate-attr</code> まとめ</h4>
+<p>評価対象外 <sup class="footnote-reference"><a href="#223">23</a></sup>.</p>
+<h3 id="summary">2章まとめ</h3>
+<p>この章では proc macro 間での情報伝達と delegation crate 比較を行いました.</p>
+<p>trait method の自動 delegation に使われている情報伝達方法は現状みっつです:</p>
+<ul>
+<li>proc macro 中の global variable を使う
+<ul>
+<li>合法ではない. 使うべきではない.</li>
+</ul>
+</li>
+<li>proc macro 中で decl macro を使う
+<ul>
+<li>柔軟に対応可能. 他のケースにも応用が効きそう.</li>
+</ul>
+</li>
+<li>間に struct/enum/trait を挟む
+<ul>
+<li>制約が強い. テクニックとして知っておいて損はなさそう.</li>
+</ul>
+</li>
+</ul>
+<p>この観点からは, <strong>trait method に対しては ambassador, それ以外については delegate</strong> という使い分けになるでしょう <sup class="footnote-reference"><a href="#224">24</a></sup> <sup class="footnote-reference"><a href="#225">25</a></sup>.</p>
+<p><a href="../2025-01-04-thin_delegate-3">3章</a> では thin_delegate の設計と実装の話をします.</p>
+<div class="footnote-definition" id="201"><sup class="footnote-definition-label">1</sup>
+<p>「そうでなければ」というのは正確ではないが理解しやすさを優先してこの様な説明にした.
+(まぁ挙動として間違ってはいない (はず).) 正確な理解のためにはコードを追ってください.</p>
+</div>
+<div class="footnote-definition" id="202"><sup class="footnote-definition-label">2</sup>
+<p>例では 1 ファイルで説明していますが, trait と enum の定義を別ファイルに置くのは普通にやります.
+このとき proc macro の評価順序は proc macro 作者としては期待できないと思っておいた方が良いです.
+(僕のクソ雑理解では rustc のコンパイルは (特に proc macro 解決フェーズは) 決定的ではあるが,
+どのファイルがどの順序で読まれるかは普通意識しないため.)
+あくまで推測ですが「defer の仕組みがないとこの問題に対応できない」ということでこういう作りになっているのでしょう.</p>
+</div>
+<div class="footnote-definition" id="203"><sup class="footnote-definition-label">3</sup>
+<p>Rustonomicon にこのあたりのこと書いてないっぽいんですよねぇ...
+なのでここで言う「合法」というのは Rust 公式のワーディングではないし, 定義もない.
+この記事の中でのみ使い, 「なんか問題なく動きそう」くらいの意味である.
+((ここに限らないけど) 誰か知ってたら教えてください.)</p>
+</div>
+<div class="footnote-definition" id="204"><sup class="footnote-definition-label">4</sup>
+<p>でもなんか期待した挙動にはならないんですよね...
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/pass_def_in_other_mod_without_arg_incorrect.rs">3</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_def_in_other_mod_with_arg.rs">4 rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/fail_def_in_other_mod_with_arg.stderr">4 stdeerr</a>].</p>
+</div>
+<div class="footnote-definition" id="205"><sup class="footnote-definition-label">5</sup>
+<p>rustc/cargo を読んで確定させろという話ですが...</p>
+</div>
+<div class="footnote-definition" id="206"><sup class="footnote-definition-label">6</sup>
+<p>記事を書くにあたって調べ直していて crates.io を見て驚きました.
+流石に ambassader の方がダウンロード数多いと思っていたので...</p>
+</div>
+<div class="footnote-definition" id="207"><sup class="footnote-definition-label">7</sup>
+<p>enum_dispatch に限らずこの章でおすすめしないと書いている全ての crate に言えることですが,
+あなたが管理しているアプリケーションで使う分には問題ない壊れ方だと思います.
+とはいえ現代では ambassader や thin_delegate といった合法な crate があり,
+API も似た感じなので乗り換えるのをおすすめします.</p>
+</div>
+<div class="footnote-definition" id="208"><sup class="footnote-definition-label">8</sup>
+<p>僕は rustc の挙動に詳しくないのでぼかしておく.
+<a href="https://rustc-dev-guide.rust-lang.org/macro-expansion.html#expansion-and-ast-integration">このへん</a>
+から始めていけばわかる気がする.</p>
+</div>
+<div class="footnote-definition" id="209"><sup class="footnote-definition-label">9</sup>
+<p>enum_dispatch の最新版 (0.3.13) だとこれは扱えます
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/pass_super_trait.rs">rs</a>]
+[<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui/enum_dispatch/pass_super_trait.rs">stderr</a>].</p>
+</div>
+<div class="footnote-definition" id="210"><sup class="footnote-definition-label">10</sup>
+<p><a href="https://crates.io/crates/trybuild">trybuild</a> を使って unsupported case を書いていてくれてマジでありがとう.
+<a href="https://github.com/kenoss/kenoss.github.io/tree/main/content/blog/2025-01-01-thin_delegate_aux/tests/ui">自分で書いて検証</a> せずに済んだ.
+全人類見習うべきだよ.</p>
+</div>
+<div class="footnote-definition" id="211"><sup class="footnote-definition-label">11</sup>
+<p>発見されていない. まぁでも多分問題ないでしょう.</p>
+</div>
+<div class="footnote-definition" id="212"><sup class="footnote-definition-label">12</sup>
+<p>(ちゃんとチェックしてないけど) <code>impl Trait for auto_delegate::Delegates&lt;...&gt;</code> の if 分岐はコンパイラの最適化で消えることが期待されていると思う.
+(ちゃんとやらないといけないので消えなくてもおかしくはないけど.)</p>
+</div>
+<div class="footnote-definition" id="213"><sup class="footnote-definition-label">13</sup>
+<p>でも enum_delegate v0.3.0 ではサポートされていない super trait がサポートされていたり,
+(ちょっと弄った感じ) generics/trait bound まわりで反例が作れないので頑張ってはいると思う.</p>
+</div>
+<div class="footnote-definition" id="214"><sup class="footnote-definition-label">14</sup>
+<p>auto-delegate の initial commit より前である. v0.3.0 リリースされてないけど...
+(リリースされてなくて困って <a href="https://crates.io/crates/temporary_enum_delegate_0_3_0">野良リリース</a> してる人がおる.)</p>
+</div>
+<div class="footnote-definition" id="215"><sup class="footnote-definition-label">15</sup>
+<p>真面目にやればできるのかもしれないがこの仕組みの上であんまり頑張ってもな...</p>
+</div>
+<div class="footnote-definition" id="216"><sup class="footnote-definition-label">16</sup>
+<p>この <a href="https://gitlab.com/dawn_app/enum_delegate/-/merge_requests/1/diffs">PR</a>
+で not supported case のテストが削除されている. この仕組みは有望ではないと思っているので裏取りが面倒になってきた.
+enum_delegate v0.3.0 の実装は斜め読みでほぼほぼ <code>cargo expand</code> しか見ていない.</p>
+</div>
+<div class="footnote-definition" id="217"><sup class="footnote-definition-label">17</sup>
+<p>しかしそれ, 現時点で差がないことはわかるかもしれないけど継続的保証になってないのでは...?</p>
+</div>
+<div class="footnote-definition" id="218"><sup class="footnote-definition-label">18</sup>
+<p>docs.rs の方は 0.4.1 が最新だがリポジトリ側の tag は 0.3.5 が最新. ずれるけど許して.
+(最新を参照しないのはフェアじゃない感がある.)</p>
+</div>
+<div class="footnote-definition" id="219"><sup class="footnote-definition-label">19</sup>
+<p>説明の都合で順序が逆になって申し訳ないが, enum_delegate よりも ambassador の方が登場がだいぶ早い.
+(ambassodor, 機能も構文も複雑なんですよねぇ...)</p>
+</div>
+<div class="footnote-definition" id="220"><sup class="footnote-definition-label">20</sup>
+<p>実際のところは, 構文が好きじゃなくてあんまりまじめに秘孔を突く作業をしてないのでよくわからない...
+(先行研究はもっとちゃんと調べろというのははい...)
+まぁドキュメントやテストや issue を見ている限りでは信頼できると思います. (How it works は書いてほしかった.)
+機能がこれで十分で構文が嫌いでなければ使うのは止めません.</p>
+</div>
+<div class="footnote-definition" id="221"><sup class="footnote-definition-label">21</sup>
+<p><code>syn::custom_keyword!</code> はここで知った. ありがとう.</p>
+</div>
+<div class="footnote-definition" id="222"><sup class="footnote-definition-label">22</sup>
+<p>こういうゴテゴテしたのは僕の好みではない. 覚えられない. (本当に必要?)
+まぁ <a href="https://github.com/rust-lang/rfcs/pull/3530#issuecomment-1824320933">rfcs#3530 のコメント</a>
+で author の Kobzol が言っている様に, 色々事情はあるんでしょう.
+僕はこの問題を2ヶ月くらいしか考えてないので「好みじゃない」以上のことは言えない.</p>
+</div>
+<div class="footnote-definition" id="223"><sup class="footnote-definition-label">23</sup>
+<p>delegate 使えばよくない? ambassador よりダウンロード数が多いのもよくわからないし...</p>
+</div>
+<div class="footnote-definition" id="224"><sup class="footnote-definition-label">24</sup>
+<p><a href="https://github.com/rust-lang/rfcs/pull/2393#issuecomment-801324543">rfcs#2329 のコメント</a> (2021/03)
+でも ambassador と delegate が引き合いに出されている.</p>
+</div>
+<div class="footnote-definition" id="225"><sup class="footnote-definition-label">25</sup>
+<p>僕個人としては thin_delegate の方が好きなので, 「trait method については thin_delegate, それ以外については delegate」
+になると思います. delegate crate を使いたくなるケースは今のところ思い浮かびませんが.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

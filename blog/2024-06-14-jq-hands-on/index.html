@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+jq はじめました | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="jq はじめました" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2024-06-14-jq-hands-on&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">jq はじめました</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2024-06-14" class="post-date" itemprop="datePublished">
+                2024-06-14
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 jq</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <h2 id="tl-dr">TL;DR</h2>
+<p>jq を真面目に使ったことがなかったけどはじめてみたので備忘録.</p>
+<p>初心者が書いているのでもっと良い書き方があったら教えてほしい.</p>
+<h2 id="wen-ti">問題</h2>
+<p>リポジトリにテストを管理しているディレクトリがある. テストランナーはそのディレクトリ配下のテストを実行して <code>test_result.json</code> に結果のサマリを書く.
+詳細なエラーなどは別のファイルに書く.</p>
+<p>この記事では以下の例を用いる. ちょっと長いので全体は <a href="https://kenoss.github.io/blog/2024-06-14-jq-hands-on/test_result.json">こちら</a>:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq -C .
+</span><span>{
+</span><span>  &quot;version&quot;: 3,
+</span><span>  ...
+</span><span>  &quot;tests&quot;: {
+</span><span>    &quot;virtual&quot;: {
+</span><span>      &quot;hoge&quot;: {
+</span><span>        &quot;http&quot;: {
+</span><span>          &quot;tests&quot;: {
+</span><span>            &quot;protocol&quot;: {
+</span><span>              &quot;domain0&quot;: {
+</span><span>                &quot;test0.js&quot;: {
+</span><span>                  &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>                  &quot;actual&quot;: &quot;SKIP&quot;,
+</span><span>                  &quot;other&quot;: null
+</span><span>                },
+</span><span>                &quot;test1.js&quot;: {
+</span><span>                  &quot;expected&quot;: &quot;CRASH&quot;,
+</span><span>                  &quot;actual&quot;: &quot;CRASH&quot;,
+</span><span>                  &quot;other&quot;: null,
+</span><span>                  &quot;crash_site&quot;: &quot;hoge.cc(42)&quot;,
+</span><span>                  &quot;artifacts&quot;: {
+</span><span>                    &quot;command&quot;: [
+</span><span>                      &quot;test-output-dir/virtual/hoge/tests/protocol/domain0/test1-command.txt&quot;
+</span><span>                    ],
+</span><span>                    &quot;stderr&quot;: [
+</span><span>                      &quot;test-output-dir/virtual/hoge/tests/protocol/domain0/test1-stderr.txt&quot;
+</span><span>                    ],
+</span><span>                    &quot;carsh_log&quot;: [
+</span><span>                      &quot;test-output-dir/virtual/hoge/tests/protocol/domain0/test1-crash-log.txt&quot;
+</span><span>                    ]
+</span><span>                  }
+</span><span>                }
+</span><span>              },
+</span><span>              &quot;domain1&quot;: {
+</span><span>                &quot;test0.js&quot;: {
+</span><span>                  &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>                  &quot;actual&quot;: &quot;FAIL&quot;,
+</span><span>...
+</span></code></pre>
+<p>この例では</p>
+<ul>
+<li><code>virtual/hoge/http/tests/protocol/domain0/test0.js</code></li>
+<li><code>virtual/hoge/http/tests/protocol/domain0/test1.js</code></li>
+<li><code>virtual/hoge/http/tests/protocol/domain1/test0.js</code></li>
+<li><code>virtual/hoge/http/tests/other/test0.js</code></li>
+</ul>
+<p>という4つのテストファイルがあり, みっつめのものが PASS すべきなのに FAIL している. 他は SKIP 指定をされているか (<code>"expected": "SKIP"</code>) , 期待した結果になっている (<code>"expected"</code> と <code>"actual"</code> が一致している).
+(例なので少ないが, 実際にはもっと多い.)</p>
+<p>さて, ここから人間が読みやすいサマリを生成したい. この記事では以下の出力を目指す:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | &lt;somecommand&gt;
+</span><span>{
+</span><span>  &quot;virtual/hoge/http/tests/protocol/domain1/test0.js&quot;: {
+</span><span>    &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>    &quot;actual&quot;: &quot;FAIL&quot;
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>こういうのは jq でできるはずである. (たぶん)</p>
+<h2 id="xin-gou-e">心構え</h2>
+<p>検索するときにおすすめなのは「絶対にできるはず. 情報はどこかに書かれているはずであり見付けられていないのは自分が見付けられていないからである」という自己催眠をかけることである.
+これで検索力が10倍になる. 本当になかったときだけ自分で書く. 自分で書けば見付かる.</p>
+<p>皆 jq 使っとる. 使っとらんのお前だけ.</p>
+<p><a href="https://jqlang.github.io/jq/manual/">公式ドキュメント</a> を常に開いておいて Ctrl+f する.</p>
+<p>やりたいことから方法を引くために Stack Overflow を検索する.
+ちゃんとフレーム付けられた質問に対し解決方法と原理原則からの解説が書かれている答だけがベストアンサーだ.</p>
+<h2 id="ji-ben-noki">基本のき</h2>
+<p>pretty print できる. (解説はしない.)</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq -C .
+</span></code></pre>
+<h2 id="jq-test">jq '.test'</h2>
+<p>興味があるのは <code>.test</code> という部分のみである.</p>
+<p>特定パスを抜く:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | head -n 10
+</span><span>{
+</span><span>  &quot;virtual&quot;: {
+</span><span>    &quot;hoge&quot;: {
+</span><span>      &quot;http&quot;: {
+</span><span>        &quot;tests&quot;: {
+</span><span>          &quot;protocol&quot;: {
+</span><span>            &quot;domain0&quot;: {
+</span><span>              &quot;test0.js&quot;: {
+</span><span>                &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>                &quot;actual&quot;: &quot;SKIP&quot;,
+</span></code></pre>
+<p><a href="https://jqlang.github.io/jq/manual/#basic-filters">https://jqlang.github.io/jq/manual/#basic-filters</a></p>
+<p>jq は command line や grep/sed/awk/perl や Lisp みたいなもので, フィルタを繋げるのが基本である.</p>
+<h2 id="ru-rezi-ninatuteiru-object-wo-flatten-suru">入れ子になっている object を flatten する</h2>
+<p>入れ子の object は jq で処理しにくそうである. object を deep flatten したい. とりあえず 1 level flatten したい.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | jq &lt;something&gt;
+</span><span>{
+</span><span>  &quot;virtual/hoge&quot;: {
+</span><span>    &quot;http&quot;: {
+</span><span>      &quot;tests&quot;: {
+</span></code></pre>
+<p>まだ早い. レベルを上げて出直して参れ.</p>
+<h2 id="object-items-map-f-collect"><code>object.items().map(f).collect()</code></h2>
+<p>他の言語でも object (<code>HashMap</code> など) を iterate するには <code>object.items()</code> などで iterator を使って順に処理する.</p>
+<p>jq も arary は map できるが object は array に変換してから map する.</p>
+<p><a href="https://jqlang.github.io/jq/manual/#to_entries-from_entries-with_entries">https://jqlang.github.io/jq/manual/#to_entries-from_entries-with_entries</a></p>
+<p><code>with_entries(f)</code> is <code>to_entries | map(f) | from_entries</code> である.</p>
+<h2 id="ru-rezi-ninatuteiru-object-wo-flatten-suru-2">入れ子になっている object を flatten する 2</h2>
+<ol>
+<li><a href="https://stackoverflow.com/a/24710337">https://stackoverflow.com/a/24710337</a></li>
+<li><a href="https://stackoverflow.com/a/74789205">https://stackoverflow.com/a/74789205</a></li>
+<li><a href="https://stackoverflow.com/a/74791148">https://stackoverflow.com/a/74791148</a></li>
+</ol>
+<p>これらが近そうである. ふたつめは深さが既知で固定という制約がある.
+みっつめは内側の object の key がひとつでなければならないという制約がある.
+よってひとつめを真似る.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | jq &#39;. | to_entries | map(.key as $parent_key | .value | to_entries | map(.key |= $parent_key + &quot;/&quot; + .))&#39; | jq -C . | head -n 10
+</span><span>[
+</span><span>  [
+</span><span>    {
+</span><span>      &quot;key&quot;: &quot;virtual/hoge&quot;,
+</span><span>      &quot;value&quot;: {
+</span><span>        &quot;http&quot;: {
+</span><span>          &quot;tests&quot;: {
+</span><span>            &quot;protocol&quot;: {
+</span><span>              &quot;domain0&quot;: {
+</span><span>                &quot;test0.js&quot;: {
+</span></code></pre>
+<ul>
+<li>ひとつめの <code>. to_entries | map(</code> で外側の <code>object.items().map(</code> し,</li>
+<li><code>.key as $parent_key</code> で外側の key を束縛し, [<a href="https://jqlang.github.io/jq/manual/#variable-symbolic-binding-operator">doc</a>]</li>
+<li>ふたつめの <code>.value | to_entries | map(</code> で内側の <code>object.items().map(</code> し</li>
+<li><code>.key |= $parent_key + "/" + .</code> で key だけ弄った iterator を得る. [<a href="https://jqlang.github.io/jq/manual/#addition">doc</a>]</li>
+</ul>
+<p>二重に map しているので出力は2次元配列になっている. なのであとは <code>flatten</code> して <code>from_entries</code> で元に戻す.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | jq &#39;. | to_entries | map(.key as $parent_key | .value | to_entries | map(.key |= $parent_key + &quot;/&quot; + .)) | flatten | from_entries&#39; | jq -C . | head -n 10
+</span><span>{
+</span><span>  &quot;virtual/hoge&quot;: {
+</span><span>    &quot;http&quot;: {
+</span><span>      &quot;tests&quot;: {
+</span><span>        &quot;protocol&quot;: {
+</span><span>          &quot;domain0&quot;: {
+</span><span>            &quot;test0.js&quot;: {
+</span><span>              &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>              &quot;actual&quot;: &quot;SKIP&quot;,
+</span><span>              &quot;other&quot;: null
+</span></code></pre>
+<p>よさそう.</p>
+<h2 id="kurikaesi">くりかえし</h2>
+<p>あとはこれを必要なだけ繰り返せばよい. いくつか方法が考えられる.</p>
+<ol type="A">
+  <li>結果が変わらなくなるまで繰り返すのをシェル芸でやる.</li>
+  <li>処理すべき <code>.value</code> がなくなるまで繰り返す. (例えば全ての <code>.value</code> が <code>"expected"</code> を持つ.)</li>
+  <li>先に JSON の max depth を取っておいてその回数繰り返す. (1回の処理につきネストがひとつ減るので.)</li>
+</ol>
+<p>A. はつまらないのでここではやらない.</p>
+<p>B. は素直だが処理が必要ないケースの判定が微妙に重複している.</p>
+<p>C. は (depth が取れないので) 2 pass 舐める必要があるが汎用的になりそう.</p>
+<p>B. および C. を試す.</p>
+<h3 id="b-chu-li-subeki-value-ganakunarumadezao-rifan-su-li-ebaquan-teno-value-ga-expected-wochi-tu">B. 処理すべき <code>.value</code> がなくなるまで繰り返す. (例えば全ての <code>.value</code> が <code>"expected"</code> を持つ.)</h3>
+<ul>
+<li>分岐は if-then-else-end [<a href="https://jqlang.github.io/jq/manual/#if-then-else-end">doc</a>] がある.</li>
+<li>ループは while [<a href="https://jqlang.github.io/jq/manual/#while">doc</a>] や until [<a href="https://jqlang.github.io/jq/manual/#until">doc</a>] がある.</li>
+<li>all [<a href="https://jqlang.github.io/jq/manual/#all">doc</a>] /any [<a href="https://jqlang.github.io/jq/manual/#any">doc</a>] もある.</li>
+<li>関数も定義できる. [<a href="https://jqlang.github.io/jq/manual/#defining-functions">doc</a>]</li>
+</ul>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | jq &#39;def should_process(x): x | has(&quot;expected&quot;); until(. | to_entries | map(should_process(.value)) | all; . | to_entries | map(.key as $parent_key | if (should_process(.value)) then [.] else (.value | to_entries | map(.key |= $parent_key + &quot;/&quot; + .)) end) | flatten | from_entries)&#39; | jq -C . | head -n 10
+</span><span>{
+</span><span>  &quot;virtual/hoge/http/tests/protocol/domain0/test0.js&quot;: {
+</span><span>    &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>    &quot;actual&quot;: &quot;SKIP&quot;,
+</span><span>    &quot;other&quot;: null
+</span><span>  },
+</span><span>  &quot;virtual/hoge/http/tests/protocol/domain0/test1.js&quot;: {
+</span><span>    &quot;expected&quot;: &quot;CRASH&quot;,
+</span><span>    &quot;actual&quot;: &quot;CRASH&quot;,
+</span><span>    &quot;other&quot;: null,
+</span></code></pre>
+<p>よさそう.</p>
+<h3 id="while-to-until-nowei-i">while と until の違い</h3>
+<p>驚きの事実なのだが, <code>while(condition; f)</code> と <code>until(condition | not; f)</code> は等価ではない.</p>
+<p><code>while(condition; f)</code> は <code>condition</code> が満されなくなくなるまで <code>f</code> を繰り返し適用し, 満たさなくなったものは出力されない.
+つまり <code>. | f^n</code> が初めて <code>condition</code> を満たさないとき, <code>. | f</code>, <code>. | f^2</code>, ..., <code>. | f^{n-1}</code> を出力する.</p>
+<p><code>until(condition | not; f)</code> は <code>condition</code> が満されなくなくなるまで <code>f</code> を繰り返し適用し, 初めて満たさなくなったもののみを出力する.
+つまり <code>. | f^n</code> を出力する.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ echo 1 | jq &#39;[while(. &lt; 100; . * 2)]&#39;
+</span><span>[
+</span><span>  1,
+</span><span>  2,
+</span><span>  4,
+</span><span>  8,
+</span><span>  16,
+</span><span>  32,
+</span><span>  64
+</span><span>]
+</span><span>
+</span><span>$ echo 1 | jq &#39;while(. &lt; 100; . * 2)&#39;
+</span><span>1
+</span><span>2
+</span><span>4
+</span><span>8
+</span><span>16
+</span><span>32
+</span><span>64
+</span><span>
+</span><span>$ echo 1 | jq &#39;[until(. &lt; 100 | not; . * 2)]&#39;
+</span><span>[
+</span><span>  128
+</span><span>]
+</span><span>
+</span><span>$ echo 1 | jq &#39;until(. &lt; 100 | not; . * 2)&#39;
+</span><span>128
+</span></code></pre>
+<p>これマジ!?</p>
+<p>(jq Manual の "See advanced topics below." ってどこを見ればいいんだ?)</p>
+<p>だから until を使う必要があったんですね.</p>
+<h2 id="c-xian-ni-json-no-max-depth-woqu-tuteoitesonohui-shu-zao-rifan-su-1hui-nochu-li-nitukinesutogahitotujian-runode">C. 先に JSON の max depth を取っておいてその回数繰り返す. (1回の処理につきネストがひとつ減るので.)</h2>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ echo &#39;0\n&quot;hoge&quot;\n[]\n{}\n[{&quot;a&quot;: []}, 1]\n[{&quot;a&quot;: []}, [{&quot;b&quot;: 1}, {&quot;c&quot;: {&quot;d&quot;: 1}}]]\n&#39; | jq &#39;def depth(x): if (. | [type] | inside([&quot;array&quot;, &quot;object&quot;]) | not) then 0 else ({depth: 0, xs: [x]} | until((.xs | length) == 0; {depth: (.depth + 1), xs: (.xs | map(if (. | type == &quot;array&quot;) then . else (if (. | type == &quot;object&quot;) then (to_entries | map(.value)) else [] end) end) | flatten)}) | .depth) end; depth(.)&#39;
+</span><span>0
+</span><span>0
+</span><span>1
+</span><span>1
+</span><span>2
+</span><span>4
+</span></code></pre>
+<p>はい. BFS っぽく root から <code>{depth, xs}</code> を持ち回って空になるまで <code>depth &lt;- depth + 1; xs &lt;- xs.map(children).flatten()</code> するだけですね.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | jq &#39;def depth(x): if (. | [type] | inside([&quot;array&quot;, &quot;object&quot;]) | not) then 0 else ({depth: 0, xs: [x]} | until((.xs | length) == 0; {depth: (.depth + 1), xs: (.xs | map(if (. | type == &quot;array&quot;) then . else (if (. | type == &quot;object&quot;) then (to_entries | map(.value)) else [] end) end) | flatten)}) | .depth) end; def should_process(x): x | has(&quot;expected&quot;); {i: depth(.), x: .} | until(.i == 0; {i: (.i - 1), x: (.x | to_entries | map(.key as $parent_key | if (should_process(.value)) then [.] else (.value | to_entries | map(.key |= $parent_key + &quot;/&quot; + .)) end) | flatten | from_entries)}) | .x&#39; | jq -C . | head -n 10
+</span><span>{
+</span><span>  &quot;virtual/hoge/http/tests/protocol/domain0/test0.js&quot;: {
+</span><span>    &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>    &quot;actual&quot;: &quot;SKIP&quot;,
+</span><span>    &quot;other&quot;: null
+</span><span>  },
+</span><span>  &quot;virtual/hoge/http/tests/protocol/domain0/test1.js&quot;: {
+</span><span>    &quot;expected&quot;: &quot;CRASH&quot;,
+</span><span>    &quot;actual&quot;: &quot;CRASH&quot;,
+</span><span>    &quot;other&quot;: null,
+</span></code></pre>
+<p>よさそう.</p>
+<h2 id="jie-ju-yu-sikatutamono">結局欲しかったもの</h2>
+<p>少しだけ短かい B. を使う. あとはちょろっとフィルタするだけである.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cat test_result.json | jq &#39;.tests&#39; | jq &#39;def should_process(x): x | has(&quot;expected&quot;); until(. | to_entries | map(should_process(.value)) | all; . | to_entries | map(.key as $parent_key | if (should_process(.value)) then [.] else (.value | to_entries | map(.key |= $parent_key + &quot;/&quot; + .)) end) | flatten | from_entries)&#39; | jq &#39;. | with_entries({&quot;key&quot;: .key, &quot;value&quot;: {&quot;expected&quot;: .value.expected, &quot;actual&quot;: .value.actual}})&#39; | jq &#39;with_entries(select(.value.actual != &quot;SKIP&quot;))&#39; | jq &#39;with_entries(select(.value.actual != .value.expected))&#39; | jq -C .
+</span><span>{
+</span><span>  &quot;virtual/hoge/http/tests/protocol/domain1/test0.js&quot;: {
+</span><span>    &quot;expected&quot;: &quot;PASS&quot;,
+</span><span>    &quot;actual&quot;: &quot;FAIL&quot;
+</span><span>  }
+</span><span>}
+</span></code></pre>
+<p>ええやん!! こういうのが欲しかった!!</p>
+<p>で, これどうやってメンテするんだろ...?</p>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>
