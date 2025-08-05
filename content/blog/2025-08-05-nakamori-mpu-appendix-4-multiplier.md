@@ -53,10 +53,12 @@ def mul8(x: int, y: int):
     for i in range(0, 8):
         print(i, x, y, r)
         y_ = y & 0b1
+        a: int
         if y_ == 0b0:
-            pass
+            a = 0
         elif y_ == 0b1:
-            r += x
+            a = x
+        r += a
         x = x << 1
         y = y >> 1
     return r
@@ -126,14 +128,16 @@ def mul8_booth2(x: int, y: int):
     for i in range(0, 9):
         print(i, x, mx, y, r)
         y_ = y & 0b11
+        a: int
         if y_ == 0b00:
-            pass
+            a = 0
         elif y_ == 0b01:
-            r += x
+            a = x
         elif y_ == 0b10:
-            r += mx
+            a = mx
         elif y_ == 0b11:
-            pass
+            a = 0
+        r += a
         x = x << 1
         mx = mx << 1
         y = y >> 1
@@ -165,24 +169,26 @@ def mul8_booth3(x: int, y: int):
     for i in range(0, 5):
         print(i, x, mx, y, r)
         y_ = y & 0b111
+        a: int
         if y_ == 0b000:
-            pass
+            a = 0
         elif y_ == 0b001:
-            r += x
+            a = x
         elif y_ == 0b010:
-            # r += (x << 1) + mx
-            r += x
+            # a = (x << 1) + mx
+            a = x
         elif y_ == 0b011:
-            r += (x << 1)
+            a = (x << 1)
         elif y_ == 0b100:
-            r += (mx << 1)
+            a = (mx << 1)
         elif y_ == 0b101:
-            # r += (mx << 1) + x
-            r += mx
+            # a = (mx << 1) + x
+            a = mx
         elif y_ == 0b110:
-            r += mx
+            a = mx
         elif y_ == 0b111:
-            pass
+            a = 0
+        r += a
         x = x << 2
         mx = mx << 2
         y = y >> 2
