@@ -7,7 +7,7 @@ jobs:
       - name: 'checkout'
         uses: actions/checkout@v4
       - name: 'build'
-        uses: shalzz/zola-deploy-action@v0.19.2
+        uses: shalzz/zola-deploy-action@v0.21.0
         env:
           BUILD_DIR: .
           BUILD_ONLY: true
