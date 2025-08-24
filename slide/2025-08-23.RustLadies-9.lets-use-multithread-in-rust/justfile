@@ -1,0 +1,12 @@
+deck-apply:
+  # frozen
+  # deck apply --presentation-id 1uToGGW8HytOrEpAtExvnj7QudG82nrmQxY8spsOK-6s deck.md
+
+dot:
+  mkdir /tmp/deck
+  dot -T svg watchdo.dot -o /tmp/deck/watchdo.svg
+  convert -density 1200 /tmp/deck/watchdo.svg /tmp/deck/watchdo.png
+
+silicon:
+  mkdir /tmp/deck
+  silicon /tmp/deck/deck.rs -o /tmp/deck/silicon.png -f 'Ricty Diminished Discord for Powerline'

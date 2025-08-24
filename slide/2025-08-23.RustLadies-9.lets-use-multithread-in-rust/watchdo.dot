@@ -1,0 +1,79 @@
+digraph graph_name {
+  graph [
+    charset = "UTF-8";
+    layout = fdp;
+    labelloc = "t",
+    bgcolor = "#333333",
+    fontcolor = "#aaaaaa",
+    splines = spline,
+    ranksep = 1.0,
+    nodesep = 0.3,
+    overlap = true,
+  ];
+
+  node [
+    colorscheme = "rdylgn11"
+    style = "solid,filled",
+    color = 7,
+    fillcolor = 11,
+    fontcolor = 6,
+    fontname = "Migu 1M",
+    fontsize = 14,
+    fixedsize = false,
+    shape = box,
+    width = 1.2
+    height = 0.6,
+  ];
+
+  edge [
+    style = solid,
+    fontsize = 14,
+    color = "#dddddd",
+    fontcolor = "#dddddd",
+    fontname = "Migu 1M",
+    labelfloat = true,
+  ];
+
+  // Node
+  GitProducer [
+    pos = "0,0!",
+  ];
+  GitWatcher [
+    pos = "0,-1.25!",
+  ];
+  WalkProducer [
+    pos = "4,0!",
+  ];
+  WalkWatcher [
+    pos = "4,-1.25!",
+  ];
+  Switcher [
+    pos = "2.0,-2!",
+  ];
+  Delayer [
+    pos = "2.0,-3.25!",
+  ];
+  Runner [
+    pos = "2.0,-4.5!",
+  ];
+
+  // Edge
+  GitProducer -> GitWatcher [
+    label = "git status で検知されたファイル",
+  ];
+  GitWatcher -> Switcher [
+    label = "inotify で監視して変更あったら通知",
+  ];
+  WalkProducer -> WalkWatcher [
+    label = "directory walk した結果",
+  ];
+  WalkWatcher -> Switcher [
+    label = "inotify で監視して変更あったら通知",
+  ];
+  Switcher -> Delayer [
+    label = "directory walk 終わるまでは GitWatcher の結果",
+  ];
+  Delayer -> Runner [
+    label = "変更があっても最低1秒は開けてコマンドを実行",
+  ];
+}
