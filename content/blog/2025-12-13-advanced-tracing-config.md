@@ -38,6 +38,12 @@ Rust での [`tracing`](https://docs.rs/tracing/latest/tracing/) は, ざっく�
 的な挙動のために以下の様な設定を使うやつでしょう:
 
 ```rust
+#[allow(unused_imports)]
+#[macro_use]
+extern crate tracing;
+
+use anyhow;
+
 fn tracing_init() {
     use time::UtcOffset;
     use time::macros::format_description;
@@ -73,14 +79,34 @@ fn main() -> anyhow::Result<()> {
 fn hoge() -> anyhow::Result<()> {
     info!("log in hoge");
 
+    f(2);
+
     Ok(())
+}
+
+#[tracing::instrument]
+fn f(n: usize) {
+    debug!("f({n})");
+
+    if n == 0 {
+        return;
+    }
+
+    f(n - 1);
 }
 ```
 
 出力サンプルはこんな感じです:
 
 ```
-TODO
+$ RUST_LOG=debug cargo run
+   Compiling hoge v0.1.0 (/home/kenoss/work/hoge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running `target/debug/hoge`
+23:33:39.858  INFO hoge: 40: log in hoge
+23:33:39.858 DEBUG f{n=2}: hoge: 49: f(2)
+23:33:39.858 DEBUG f{n=2}:f{n=1}: hoge: 49: f(1)
+23:33:39.858 DEBUG f{n=2}:f{n=1}:f{n=0}: hoge: 49: f(0)
 ```
 
 この記事ではここから一歩進んで, 以下の機能を足していきます:
