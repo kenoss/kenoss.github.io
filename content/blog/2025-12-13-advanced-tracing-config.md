@@ -513,7 +513,7 @@ Happy holidays!
       めんどくさそうなのでやめておきます. 調べてる時間ないし. 詳しい方がいたら教えてください.
       (まぁ短絡評価したりするところとかは Layer って感じはするし, それ言ったら
       `tracing_subscriber::fmt::Layer` は Layer という名前が適切なんか?という話には, なる.)
-[^5]: https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/index.html#global-filtering
+[^5]: <https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/index.html#global-filtering>
 [^6]: 具体的には, sabiniwm では udev backend (TTY から起動) のときは file に書き,
       winit backend のときは stdout に出しています.
 [^7]: 実際, これがこの記事を書こうと思った決め手です.
