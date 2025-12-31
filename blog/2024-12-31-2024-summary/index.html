@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+2024年まとめ | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="2024年まとめ" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2024-12-31-2024-summary&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">2024年まとめ</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2024-12-31" class="post-date" itemprop="datePublished">
+                2024-12-31
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 poem</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <p>keno貫之</p>
+<p>男もすなるまとめといふものを, 我もしてみむとてするなり.</p>
+<h2 id="2024nian">2024年</h2>
+<p>そもそも去年のまとめがないので抱負もない.</p>
+<p>...いや一応何かしら考えつつ行動はしているはず. 2022年に転職したので2022年と2023年は「死なない」「燃え尽きない」あたりを
+据えていた気がする. でも今年は何を考えてたのか思い出せない.</p>
+<h3 id="shi-shi">仕事</h3>
+<p>年初はわちゃわちゃしていてあまり思い出せない. 3月頃に体調を崩して2週間くらい休んで回復した.
+仕事はその後はなんやかんやして年内に入れたいものは納まった気がする.</p>
+<h3 id="oss-toka">OSS とか</h3>
+<p>3月末頃から <a href="https://github.com/kenoss/sabiniwm">sabiniwm</a> という自作の Wayland compositor を書き始めた.
+11月末の <a href="https://rust.tokyo/">Rust.Tokyo 2024</a> でこれを簡略化した
+<a href="https://github.com/kenoss/tatarajo">tatarajo</a> と smithay の話を <a href="https://rust.tokyo/lineup/12">した</a>.
+この発表は smithay を中心に据えたので sabiniwm のことはあまり話さなかった.
+alpha goal を達成したあたりでまた記事を書こうと思う. (まぁ, もう割と実用しているのだけれど.)</p>
+<p>sabiniwm を作る上で rustfmt の <code>imports_granularity</code> のバグを見つけたので
+<a href="https://github.com/rust-lang/rustfmt/pull/6165">PR</a> を出した. 本体ではないにせよ
+rust-lang へのコントリビューションは初めてだ. rustfmt は割とやることある気がしていてｺﾝﾄﾘﾋﾞｭｰﾖﾁｬﾝｽ
+だと感じたので構造を解説してなんやかんやしようかなと思ってたけど, そういう雰囲気ではないっぽい.
+まぁでも同根の問題について <a href="https://summerofcode.withgoogle.com/archive/2024/projects/gHEu3vxc">GSoC</a>
+とかやってたらしいからトピックの選び方次第な気もする. 僕も GSoC やりたい.</p>
+<p>sabiniwm を作る上で delegation の仕組みが必要になったので, 途中で yak shaving を開始した.
+7月末に <a href="https://github.com/dtolnay/proc-macro-workshop">proc macro workshop</a> をやり,
+8月中旬まで習作として <a href="https://github.com/kenoss/struct_cache_field">struct_cache_field</a> を作っていた.
+そこから2ヶ月ほどで <a href="https://github.com/kenoss/thin_delegate">thin_delegate</a> を作った.
+これは明日から記事を連投する予定.
+都合3ヶ月もこれに費したわけで, 「Rust.Tokyo は11月末か〜. 余裕だな!!」と思っていたのに準備がかなりギリギリになった.
+alpha goal を達成して発表するはずだったのに予定が崩れたが, thin_delegate は割と出来が良いと思っているのでまぁいいか.</p>
+<p>10月末あたりから並行して ISUCON14 の準備を始めた. 結果は惨敗だった. (自分の) 敗因は準備不足・練習不足である.
+11月デスマの割に準備に時間を取れたのは良かったと思うけど, そもそもサーバー本職ですらないのに一月で
+どうこうなると思っているのが間違っている. 来年はもっと投資して臨みたい.</p>
+<p>12月はひたすらドキュメントを書いていた. つらい...実装したい...</p>
+<p>自作テキストエディタの last commit は去年の12月である. そろそろ再開したい...</p>
+<p><a href="../2024-12-30-mokumoku-reading-books">1年続けていた詳解 システム・パフォーマンスをついに遂に読み終えた.</a>
+次はまた CPU だ.</p>
+<p>ブログはいいかげん書く癖をつけないとなぁと思っている.
+取り敢えず雑でもいいので情報を残しておかないと忘れて再度調べることになったりするので,
+<a href="../2024-10-29-vblank-and-redraw">memo を残したり</a> する取り組みを始めた.
+いくつか書けてない記事の案がある. 力が足りない...</p>
+<p>いくつか書きたいソフトウェアがある. 力が足りない...</p>
+<h3 id="gemu">ゲーム</h3>
+<p>Splatoon 3はグランドフェスを迎え, ついに終わりを迎えた. いや2時代に一緒にやってた友達がもうほぼやってないから
+既に終わっていたのだが. レートはエリア2450くらいまで行った. 最後まで人権ラインの2500に届かなかったのが悔やまれる.
+終わったとはいえ誘ってもらえれば行きます行きます.</p>
+<p>AC6 の3週目クリアしてないし, エルデンリングは2か3ボスくらい倒したあたりで止まっているし, 孤星も Babel も14章も読めていない...
+いや, いや, 読もうとは思っているんです. 信じてください!! (皆なんでそんなにゲームできるんだ...?)</p>
+<h3 id="mai-imono">買いもの</h3>
+<p>P64 と Paragon は今年買った気がする. 旨いコーヒーを毎日飲めるので実質無料である.</p>
+<p>自宅用に iPad Air 13inch, 携帯用に iPad mini を書い足した. iPad Air 11inch は持て余している.</p>
+<p>奨学金を繰り上げ返済した. 俺は自由だ!!</p>
+<p>最近は家が欲しい. 人権のあるキッチンと人権のある窓が欲しい. いまだに毎日凍えている...</p>
+<h3 id="ren-sheng">人生</h3>
+<p>人生の進捗はありません. わりと困っている...</p>
+<h2 id="2025nian">2025年</h2>
+<ul>
+<li>仕事でより良い成果を出す</li>
+<li>sabiniwm を会社のマシンで動かせるようにしてこれで仕事をできるようにする.</li>
+<li>自作テキストエディタで作業できるくらいにする.</li>
+<li>ISUCON に投資する. 実績を残す.</li>
+<li>ブログ書く頻度を上げる.</li>
+</ul>
+<p>ほなまた来年 (´・ω・`)ﾉｼ</p>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

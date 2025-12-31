@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+sentry::init() in anysc main() | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="sentry::init() in anysc main()" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2021-12-02-sentry-init-in-async-main&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">sentry::init() in anysc main()</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2021-12-02" class="post-date" itemprop="datePublished">
+                2021-12-02
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <p>この記事は <a href="https://qiita.com/advent-calendar/2021/rust">Rust Advent Calendar 2021</a> 2日目の記事です.</p>
+<h2 id="version-nado">version など</h2>
+<p><a href="https://github.com/getsentry/sentry-rust">https://github.com/getsentry/sentry-rust</a>: <a href="https://github.com/getsentry/sentry-rust/tree/0.23.0">0.23.0</a></p>
+<h2 id="sentry-noshi-qian-zhi-shi">Sentry の事前知識</h2>
+<p><a href="https://sentry.io/">Sentry</a> はエラーやトレースなどの情報を集約して管理できるサービスです.</p>
+<p>Sentry に登録して, DSN (API token のようなもの) を取得して, 例えば</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> _guard = sentry::init(sentry::ClientOptions::default());
+</span><span>
+</span><span>    sentry::capture_message(&quot;</span><span style="color:#a3be8c;">something wrong</span><span>&quot;, sentry::Level::Error);
+</span><span>
+</span><span>    panic!(&quot;</span><span style="color:#a3be8c;">explicit panic</span><span>&quot;);
+</span><span>}
+</span></code></pre>
+<p>というプログラムを <code>SENTRY_DSN=&lt;dsn&gt; cargo run</code> として実行すると Sentry にエラーなどの情報が送られ, Sentry の UI 上でそれらを見ることができます.
+べんりですね.</p>
+<p>便利なのでよく web サーバーのエラーを把握したりするために使われたりします.</p>
+<p>さて, 上記の <code>sentry::capture_message()</code> や <code>panic!()</code> のところではエラーメッセージ以外の情報を渡していません.
+エラーを送信するには DSN やらクライアントを使うはずです.</p>
+<p>裏側を覗く前に登場人物を紹介しておきましょう.</p>
+<ul>
+<li><code>Client</code>
+<ul>
+<li>https://docs.rs/sentry/0.23.0/sentry/struct.Client.html</li>
+<li>DSN を保持しており, 実際の <code>capture_event()</code> の処理を行います.</li>
+</ul>
+</li>
+<li><code>Hub</code>
+<ul>
+<li>https://docs.rs/sentry/0.23.0/sentry/struct.Hub.html</li>
+<li>スレッドに紐付いており, 文脈情報を保持します. その中には <code>Client</code> が含まれます. (後でもう少し詳しく説明します.)</li>
+</ul>
+</li>
+</ul>
+<p><code>sentry::init()</code> から <code>sentry::capture_message()</code> までの流れは以下の様な感じです.</p>
+<p>https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry/src/init.rs#L91</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">init</span><span>&lt;C&gt;(</span><span style="color:#bf616a;">opts</span><span>: C) -&gt; ClientInitGuard
+</span><span style="color:#b48ead;">where
+</span><span>    C: Into&lt;ClientOptions&gt;,
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">let</span><span> opts = </span><span style="color:#96b5b4;">apply_defaults</span><span>(opts.</span><span style="color:#96b5b4;">into</span><span>());
+</span><span>    </span><span style="color:#b48ead;">let</span><span> auto_session_tracking = opts.auto_session_tracking;
+</span><span>    </span><span style="color:#b48ead;">let</span><span> session_mode = opts.session_mode;
+</span><span>    </span><span style="color:#b48ead;">let</span><span> client = Arc::new(Client::from(opts));
+</span><span>
+</span><span>    Hub::with(|</span><span style="color:#bf616a;">hub</span><span>| hub.</span><span style="color:#96b5b4;">bind_client</span><span>(Some(client.</span><span style="color:#96b5b4;">clone</span><span>())));
+</span><span>    </span><span style="color:#b48ead;">if let </span><span>Some(dsn) = client.</span><span style="color:#96b5b4;">dsn</span><span>() {
+</span><span>        sentry_debug!(&quot;</span><span style="color:#a3be8c;">enabled sentry client for DSN {}</span><span>&quot;, dsn);
+</span><span>    } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>        sentry_debug!(&quot;</span><span style="color:#a3be8c;">initialized disabled sentry client due to disabled or invalid DSN</span><span>&quot;);
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">if</span><span> auto_session_tracking &amp;&amp; session_mode == SessionMode::Application {
+</span><span>        </span><span style="color:#b48ead;">crate</span><span>::start_session()
+</span><span>    }
+</span><span>    ClientInitGuard(client)
+</span><span>}
+</span></code></pre>
+<p><code>sentry::init()</code> はまず <a href="https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry/src/defaults.rs#L84-L88"><code>apply_defaults()</code></a> で環境変数 <code>SENTRY_DSN</code> から DSN を取得します.
+それを用いて <code>Client</code> を作り, カレントスレッドの <code>Hub</code> に渡しています. (c.f. <a href="https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L151"><code>Hub::with()</code></a>)</p>
+<p>https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/api.rs#L40</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">capture_event</span><span>(</span><span style="color:#bf616a;">event</span><span>: Event&lt;</span><span style="color:#b48ead;">&#39;static</span><span>&gt;) -&gt; Uuid {
+</span><span>    Hub::with_active(|</span><span style="color:#bf616a;">hub</span><span>| hub.</span><span style="color:#96b5b4;">capture_event</span><span>(event))
+</span><span>}
+</span></code></pre>
+<p><code>sentry::capture_event()</code> はカレントスレッドの <code>Hub</code> の <a href="https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L276"><code>Hub::capture_event()</code></a> を呼び出しますが,
+ここで <code>Hub</code> の中の <code>Client</code> の <code>Client::capture_event()</code> を呼びます. (c.f. <a href="https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L173"><code>Hub::with_active()</code></a>)</p>
+<p>というように, <code>sentry::capture_event()</code> をユーザーが手放しで呼び出せるのは sentry が裏側で <strong>スレッドに紐づく <code>Hub</code></strong> を経由して色々やりくりしてくれているからというのがわかりますね.</p>
+<p>特に panic するときは普通は明示的に何かを渡すことはできませんから, こういう仕組みになっているのも納得できます.</p>
+<h2 id="wen-ti-she-ding">問題設定</h2>
+<p>さて, ようやく本題です.</p>
+<p>Q. 以下のプログラムは意図したとおりに動くでしょうか?</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">tokio</span><span>::</span><span style="color:#bf616a;">main</span><span>]
+</span><span>async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> _guard = sentry::init(sentry::ClientOptions::default());
+</span><span>
+</span><span>    ...do_something... </span><span style="color:#65737e;">// 色々処理をする中で sentry を呼び出す.
+</span><span>}
+</span></code></pre>
+<p>えー, まぁそりゃ動きますよね. そもそも何が問題なのかって?</p>
+<p><a href="https://keno-ss.hatenadiary.org/entry/2019/12/01/235828">以前の記事</a> でも少し触れましたが, Rust の非同期の仕組みは</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>- async/await 構文を Future に変換.
+</span><span>- Future は asymmetric stackless coroutine. 状態機械として実装可能なので低コスト.
+</span><span>- Future は合成可能なので asymmetric stackful coroutine 概念を作れる.
+</span><span>- runtime がそれらを管理することで symmetric stackful coroutine のように見做せる.
+</span></code></pre>
+<p>でした. async fn は <code>Future</code> になり, それは runtime (ここでは <code>tokio</code>) から <code>poll()</code> されます.
+ところで <code>poll()</code> が呼び出されるときのスレッドって, どのスレッドが使われるんでしたっけ?
+残念ながらそれに対する「保証」などはありません.</p>
+<p>じゃあスレッドに情報を紐付けてなんやかんや上手くやってくれる sentry は動くの? というのがこの記事の主題です.</p>
+<h2 id="huai-sitemiru">壊してみる</h2>
+<p>さて, じゃあ一回壊してみましょうか.</p>
+<p>Q. で「意図したとおりに動くの?」と書きましたが, 基本的には sentry の呼び出し自体でエラーが起きたりはしません.
+ただ, <code>Client</code> がないためにエラーが送られない, という現象になります.
+それも意図してない挙動ではあるので, ここでは「<code>Hub</code> にちゃんと <code>Client</code> が設定されているのか」を調べてみましょう.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">tokio</span><span>::</span><span style="color:#bf616a;">main</span><span>]
+</span><span>async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() -&gt; anyhow::Result&lt;()&gt; {
+</span><span>    println!(
+</span><span>        &quot;</span><span style="color:#a3be8c;">current thread id for `sentry::init()`: </span><span style="color:#d08770;">{:?}</span><span>&quot;,
+</span><span>        std::thread::current().</span><span style="color:#96b5b4;">id</span><span>()
+</span><span>    );
+</span><span>    </span><span style="color:#b48ead;">let</span><span> _guard = sentry::init(sentry::ClientOptions::default());
+</span><span>    assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>    assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> futs = vec![];
+</span><span>    </span><span style="color:#b48ead;">for </span><span>_ in </span><span style="color:#d08770;">0</span><span>..</span><span style="color:#d08770;">10 </span><span>{
+</span><span>        futs.</span><span style="color:#96b5b4;">push</span><span>(tokio::task::spawn(async {
+</span><span>            println!(&quot;</span><span style="color:#a3be8c;">current thread id: </span><span style="color:#d08770;">{:?}</span><span>&quot;, std::thread::current().</span><span style="color:#96b5b4;">id</span><span>());
+</span><span>            assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>            assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>        }));
+</span><span>    }
+</span><span>    futures::future::join_all(futs).await;
+</span><span>
+</span><span>    println!(&quot;</span><span style="color:#a3be8c;">passed</span><span>&quot;);
+</span><span>
+</span><span>    Ok(())
+</span><span>}
+</span></code></pre>
+<p>最初に <code>sentry::init()</code> を呼び出した後, 各 <code>Future</code> の中で <code>Hub</code> の <code>Client</code> を調べています.
+<code>Hub</code> が <code>Client</code> を持っていなければ <code>assert!()</code> で panic するはずです.</p>
+<pre data-lang="console" style="background-color:#2b303b;color:#c0c5ce;" class="language-console "><code class="language-console" data-lang="console"><span>$ SENTRY_DSN=&lt;dsn&gt; cargo run
+</span><span>   Compiling example-sentry-init-in-async-main v0.1.0 (/home/keno/src/github.com/kenoss/kenoss.github.io/content/blog/2021-12-02-sentry-init-in-async-main/code/example-sentry-init-in-async-main)
+</span><span>    Finished dev [unoptimized + debuginfo] target(s) in 10.43s
+</span><span>     Running `target/debug/example-sentry-init-in-async-main`
+</span><span>current thread id for `sentry::init()`: ThreadId(1)
+</span><span>current thread id: ThreadId(5)
+</span><span>current thread id: ThreadId(9)
+</span><span>current thread id: ThreadId(5)
+</span><span>current thread id: ThreadId(9)
+</span><span>current thread id: ThreadId(5)
+</span><span>current thread id: ThreadId(9)
+</span><span>current thread id: ThreadId(5)
+</span><span>current thread id: ThreadId(9)
+</span><span>current thread id: ThreadId(5)
+</span><span>current thread id: ThreadId(9)
+</span><span>passed
+</span></code></pre>
+<p>んー, panic しませんね?</p>
+<p>ちょっと弄ってみます.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>sentry::Hub;
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">tokio</span><span>::</span><span style="color:#bf616a;">main</span><span>]
+</span><span>async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() -&gt; anyhow::Result&lt;()&gt; {
+</span><span>    tokio::task::spawn(async {
+</span><span>        println!(
+</span><span>            &quot;</span><span style="color:#a3be8c;">current thread id for `sentry::init()`: </span><span style="color:#d08770;">{:?}</span><span>&quot;,
+</span><span>            std::thread::current().</span><span style="color:#96b5b4;">id</span><span>()
+</span><span>        );
+</span><span>        </span><span style="color:#b48ead;">let</span><span> _guard = sentry::init(sentry::ClientOptions::default());
+</span><span>        assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>        assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>
+</span><span>        </span><span style="color:#b48ead;">let mut</span><span> futs = vec![];
+</span><span>        </span><span style="color:#b48ead;">for </span><span>_ in </span><span style="color:#d08770;">0</span><span>..</span><span style="color:#d08770;">10 </span><span>{
+</span><span>            futs.</span><span style="color:#96b5b4;">push</span><span>(tokio::task::spawn(async {
+</span><span>                println!(&quot;</span><span style="color:#a3be8c;">current thread id: </span><span style="color:#d08770;">{:?}</span><span>&quot;, std::thread::current().</span><span style="color:#96b5b4;">id</span><span>());
+</span><span>                assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>                assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>            }));
+</span><span>        }
+</span><span>        futures::future::join_all(futs).await;
+</span><span>
+</span><span>        println!(&quot;</span><span style="color:#a3be8c;">passed</span><span>&quot;);
+</span><span>    })
+</span><span>    .await?;
+</span><span>
+</span><span>    Ok(())
+</span><span>}
+</span></code></pre>
+<p><code>tokio::task::spawn()</code> でくるんでみました.
+これで <code>sentry::init()</code> は (プロセス開始時のスレッドとは違うかもしれない) ランダムなスレッドで実行されることになります.</p>
+<pre data-lang="console" style="background-color:#2b303b;color:#c0c5ce;" class="language-console "><code class="language-console" data-lang="console"><span>$ SENTRY_DSN=&lt;dsn&gt; cargo run
+</span><span>    Finished dev [unoptimized + debuginfo] target(s) in 0.63s
+</span><span>     Running `target/debug/example-sentry-init-in-async-main`
+</span><span>current thread id for `sentry::init()`: ThreadId(9)
+</span><span>current thread id: ThreadId(7)
+</span><span>current thread id: ThreadId(8)
+</span><span>current thread id: ThreadId(3)
+</span><span>current thread id: ThreadId(8)
+</span><span>current thread id: ThreadId(7)
+</span><span>current thread id: ThreadId(9)
+</span><span>current thread id: ThreadId(7)
+</span><span>current thread id: ThreadId(7)
+</span><span>current thread id: ThreadId(8)
+</span><span>current thread id: ThreadId(3)
+</span><span>passed
+</span></code></pre>
+<p>あれ...? こんなはずでは...</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>sentry::Hub;
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">tokio</span><span>::</span><span style="color:#bf616a;">main</span><span>]
+</span><span>async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() -&gt; anyhow::Result&lt;()&gt; {
+</span><span>    assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_none</span><span>());
+</span><span>    assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_none</span><span>());
+</span><span>
+</span><span>    tokio::task::spawn(async {
+</span><span>        println!(
+</span><span>            &quot;</span><span style="color:#a3be8c;">current thread id for `sentry::init()`: </span><span style="color:#d08770;">{:?}</span><span>&quot;,
+</span><span>            std::thread::current().</span><span style="color:#96b5b4;">id</span><span>()
+</span><span>        );
+</span><span>        </span><span style="color:#b48ead;">let</span><span> _guard = sentry::init(sentry::ClientOptions::default());
+</span><span>        assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>        assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>
+</span><span>        </span><span style="color:#b48ead;">let mut</span><span> futs = vec![];
+</span><span>        </span><span style="color:#b48ead;">for </span><span>_ in </span><span style="color:#d08770;">0</span><span>..</span><span style="color:#d08770;">10 </span><span>{
+</span><span>            futs.</span><span style="color:#96b5b4;">push</span><span>(tokio::task::spawn(async {
+</span><span>                println!(&quot;</span><span style="color:#a3be8c;">current thread id: </span><span style="color:#d08770;">{:?}</span><span>&quot;, std::thread::current().</span><span style="color:#96b5b4;">id</span><span>());
+</span><span>                assert!(Hub::current().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>                assert!(Hub::main().</span><span style="color:#96b5b4;">client</span><span>().</span><span style="color:#96b5b4;">is_some</span><span>());
+</span><span>            }));
+</span><span>        }
+</span><span>        futures::future::join_all(futs).await;
+</span><span>
+</span><span>        println!(&quot;</span><span style="color:#a3be8c;">passed</span><span>&quot;);
+</span><span>    })
+</span><span>    .await?;
+</span><span>
+</span><span>    Ok(())
+</span><span>}
+</span></code></pre>
+<p>ここで塩をひとつまみ.
+最初に謎の assert を入れてみます.</p>
+<pre data-lang="console" style="background-color:#2b303b;color:#c0c5ce;" class="language-console "><code class="language-console" data-lang="console"><span>$  SENTRY_DSN=&lt;dsn&gt; cargo run
+</span><span>    Finished dev [unoptimized + debuginfo] target(s) in 6.88s
+</span><span>     Running `target/debug/example-sentry-init-in-async-main`
+</span><span>current thread id for `sentry::init()`: ThreadId(7)
+</span><span>thread &#39;tokio-runtime-worker&#39; panicked at &#39;assertion failed: Hub::main().client().is_some()&#39;, src/main.rs:15:9
+</span><span>note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+</span><span>Error: panic
+</span></code></pre>
+<p>お!! 上手くいきましたね!!</p>
+<p>やっと <code>sentry::init()</code> を呼んでいるのに <code>Hub</code> が <code>Client</code> を持っていない, という状況ができました.</p>
+<h2 id="jie-shuo-bian">解説編</h2>
+<p>https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L142</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">main</span><span>() -&gt; Arc&lt;Hub&gt; {
+</span><span>        </span><span style="color:#d08770;">PROCESS_HUB</span><span>.</span><span style="color:#d08770;">0.</span><span style="color:#96b5b4;">clone</span><span>()
+</span><span>    }
+</span></code></pre>
+<p><code>Hub::main()</code> は単に <code>Hub</code> を参照しているだけのように見えます. なんで <code>Hub::main()</code> の呼び出しなしでは上手くいき, 呼び出しを足すと意図しない状況が発生したのでしょうか?</p>
+<p>これを理解するためには, <code>Hub</code> がいつどのように初期化されるのかを知る必要があります.</p>
+<p>https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L17-L30</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">client</span><span>&quot;)]
+</span><span>lazy_static::lazy_static! {
+</span><span>    </span><span style="color:#b48ead;">static ref </span><span style="color:#d08770;">PROCESS_HUB</span><span>: (Arc&lt;Hub&gt;, thread::ThreadId) = (
+</span><span>        Arc::new(Hub::new(None, Arc::new(Default::default()))),
+</span><span>        thread::current().</span><span style="color:#96b5b4;">id</span><span>()
+</span><span>    );
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">client</span><span>&quot;)]
+</span><span>thread_local! {
+</span><span>    </span><span style="color:#b48ead;">static </span><span style="color:#d08770;">THREAD_HUB</span><span>: UnsafeCell&lt;Arc&lt;Hub&gt;&gt; = UnsafeCell::new(
+</span><span>        Arc::new(Hub::new_from_top(&amp;</span><span style="color:#d08770;">PROCESS_HUB</span><span>.</span><span style="color:#d08770;">0</span><span>)));
+</span><span>    </span><span style="color:#b48ead;">static </span><span style="color:#d08770;">USE_PROCESS_HUB</span><span>: Cell&lt;</span><span style="color:#b48ead;">bool</span><span>&gt; = Cell::new(</span><span style="color:#d08770;">PROCESS_HUB</span><span>.</span><span style="color:#d08770;">1 </span><span>== thread::current().</span><span style="color:#96b5b4;">id</span><span>());
+</span><span>}
+</span></code></pre>
+<p><code>hub.rs</code> の中ではふたつの変数が定義されています.</p>
+<ul>
+<li><code>PROCESS_HUB</code>
+<ul>
+<li>プロセス内で unique なやつ.</li>
+<li><code>sentry::init()</code> で <code>Client</code> がセットされて <strong>ほしい</strong>.</li>
+</ul>
+</li>
+<li><code>THREAD_HUB</code>
+<ul>
+<li>スレッド毎に初期化される. 初期化時に <code>PROCESS_HUB</code> を参照して利用する.</li>
+</ul>
+</li>
+</ul>
+<p>対応する <code>lazy_static!</code> と <code>thread_local!</code> の初期化タイミングはそれぞれ以下です.</p>
+<ul>
+<li><code>lazy_static!</code>
+<ul>
+<li>最初にアクセスしたときに初期化される.</li>
+</ul>
+</li>
+<li><code>thread_local!</code>
+<ul>
+<li>https://doc.rust-lang.org/std/thread/struct.LocalKey.html#initialization-and-destruction</li>
+<li>最初に <code>with()</code> が呼ばれたときに初期化される.</li>
+</ul>
+</li>
+</ul>
+<p>ということは <code>PROCESS_HUB</code> は最初にどこかの <code>THREAD_HUB</code> が参照されたときに初期化されます.</p>
+<p>一方, <code>sentry::init()</code> は <code>Hub::with</code> で初期化対象の <code>Hub</code> を選んでいます.</p>
+<p>https://github.com/getsentry/sentry-rust/blob/0.23.0/sentry-core/src/hub.rs#L150</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    #[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">client</span><span>&quot;)]
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">with</span><span>&lt;F, R&gt;(</span><span style="color:#bf616a;">f</span><span>: F) -&gt; R
+</span><span>    </span><span style="color:#b48ead;">where
+</span><span>        F: FnOnce(&amp;Arc&lt;Hub&gt;) -&gt; R,
+</span><span>    {
+</span><span>        </span><span style="color:#b48ead;">if </span><span style="color:#d08770;">USE_PROCESS_HUB</span><span>.</span><span style="color:#96b5b4;">with</span><span>(Cell::get) {
+</span><span>            </span><span style="color:#96b5b4;">f</span><span>(&amp;</span><span style="color:#d08770;">PROCESS_HUB</span><span>.</span><span style="color:#d08770;">0</span><span>)
+</span><span>        } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>            </span><span style="color:#65737e;">// note on safety: this is safe because even though we change the Arc
+</span><span>            </span><span style="color:#65737e;">// by temporary binding we guarantee that the original Arc stays alive.
+</span><span>            </span><span style="color:#65737e;">// For more information see: run
+</span><span>            </span><span style="color:#d08770;">THREAD_HUB</span><span>.</span><span style="color:#96b5b4;">with</span><span>(|</span><span style="color:#bf616a;">stack</span><span>| </span><span style="color:#b48ead;">unsafe </span><span>{
+</span><span>                </span><span style="color:#b48ead;">let</span><span> ptr = stack.</span><span style="color:#96b5b4;">get</span><span>();
+</span><span>                </span><span style="color:#96b5b4;">f</span><span>(&amp;*ptr)
+</span><span>            })
+</span><span>        }
+</span><span>    }
+</span></code></pre>
+<p><code>Hub::with()</code> はカレントスレッドが <code>PROCESS_HUB</code> を初期化したスレッドならそれを使い, そうでなければ <code>THREAD_HUB</code> を使います.</p>
+<p>なので, 壊してみるのところで何が起こっていたかというと,</p>
+<ul>
+<li><code>sentry::init()</code> の呼び出し前に何もなければ, <code>PROCESS_HUB</code> に <code>Client</code> がセットされ, 他のスレッドでは <code>Hub::with()</code> などで <code>Hub</code> を使おうとした瞬間に <code>PROCESS_HUB</code> を参照して <code>Client</code> を設定する.</li>
+<li><code>sentry::init()</code> の呼び出し前に <code>Hub::main()</code> などの呼び出しがあると, そのスレッドで <code>PROCESS_HUB</code> が初期化される. 他のスレッドで <code>sentry::init()</code> するとそのスレッドの <code>THREAD_HUB</code> に <code>Client</code> がセットされる. その他のスレッドでは <code>THREAD_HUB</code> に <code>Client</code> はいない.</li>
+</ul>
+<p>となっていたのでした. なるほどなぁ.</p>
+<h2 id="jie-da-bian">解答編</h2>
+<p>元の疑問</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>Q. 以下のプログラムは意図したとおりに動くでしょうか?
+</span></code></pre>
+<p>に戻ると, 答えは</p>
+<p>A. async main() の先頭で <code>sentry::init()</code> を呼び出している限りは <code>Client</code> はセットされる.</p>
+<p>ということがわかりました.</p>
+<p>ふぅ, これでやっと安心して production のサーバーに sentry を入れられますね.</p>
+<p>ただ, ここでは <code>Client</code> が意図通りにセットされるのかどうかしか見ていません.
+例えば <a href="https://docs.rs/sentry/0.23.0/sentry/struct.Hub.html#method.add_breadcrumb">breadcrumb</a> のようなものはスレッドに紐付きます.
+スレッドに紐づくものは async 下では基本的には上手く動かないです.</p>
+<p>じゃあそういう「文脈情報」まで取得したいとなったらどうすればいいのかというと, それは <a href="https://github.com/tokio-rs/tracing"><code>tracing</code> crate</a> の話になるので, また気が向いたらそれについて書くかもしれません.</p>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

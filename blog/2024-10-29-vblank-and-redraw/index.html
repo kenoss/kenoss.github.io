@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+memo: Wayland compositor と redraw と VBlank | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="memo: Wayland compositor と redraw と VBlank" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2024-10-29-vblank-and-redraw&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">memo: Wayland compositor と redraw と VBlank</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2024-10-29" class="post-date" itemprop="datePublished">
+                2024-10-29
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 memo</span>
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 wayland-compositor</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <h2 id="anvil-vs-niri">Anvil vs niri</h2>
+<p><a href="https://github.com/Smithay/smithay">smithay</a> crate は Rust で Wayland を扱える素晴らしい crate です.</p>
+<p>ですが付属の Wayland compositor 実装である <a href="https://github.com/Smithay/smithay/tree/master/anvil">Anvil</a> が
+(<a href="https://github.com/YaLTeR/niri">niri と比較すると</a>) かなり読みにくいという問題があります.
+その一因として backend (udev, winit) が抽象的に分離されていないというのがある気がします.
+このへんを整理していたのですが udev backend と winit backend で redraw の処理がかなり違うのがネックになってきました.</p>
+<p>というわけで調査と比較するね. <a href="https://www.nicovideo.jp/watch/sm39360075">はいどうぞ！</a></p>
+<h2 id="niri">niri</h2>
+<p><a href="https://github.com/YaLTeR/niri/tree/f203c8729a8535f6a317df5a35dc01306be2e45c">https://github.com/YaLTeR/niri/tree/f203c8729a8535f6a317df5a35dc01306be2e45c</a></p>
+<p><a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/main.rs#L261-L263">https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/main.rs#L261-L263</a></p>
+<p>niri は <a href="https://docs.rs/calloop/latest/calloop/struct.EventLoop.html#method.run">calloop::EventLoop::run()</a>
+でループを駆動している. 中の <a href="https://docs.rs/calloop/latest/calloop/struct.EventLoop.html#method.dispatch">dispatch()</a>
+で Wayland client からのイベントなども処理している. <code>niri::State::refresh_and_flush_clients()</code> から
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/niri.rs#L2708">niri::Backend::render()</a>
+が呼び出される.</p>
+<p>tty backend の場合は
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/backend/tty.rs#L1274">DrmCompositor::render_frame()</a>
+と
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/backend/tty.rs#L1300">DrmCompositor::queue_frame()</a>
+が呼び出される. しかしこのループを愚直に回すと以下の問題が出てしまう.</p>
+<ol>
+<li>ディスプレイの FPS を上回る頻度で render してしまう.</li>
+<li>rerender の必要がないのに render してしまう. (表示しているどのウインドウも更新がない場合など.)</li>
+</ol>
+<p>1.は VBlank を使って解決する.
+redraw は <a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/niri.rs#L314">niri::RedrawState</a>
+を使って管理されている. frame が scan-out されたら
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/backend/tty.rs#L557">DrmEvent::VBlank</a>
+が通知されるのでここで
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/backend/tty.rs#L1154">redraw state を Idle にする</a>.
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/niri.rs#L2223-L2226">redraw state が Idle のものは skip される</a>
+ので無駄な render が抑えられるというワケ.</p>
+<p>2.は <code>wl_surface::commit</code> などを使って解決する.
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/handlers/compositor.rs#L193">CompositorHandler::commit()</a>,
+つまり
+<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/src/wayland/compositor/handlers.rs#L248-L252">wl_surface::commit</a>
+が呼ばれるときに
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/handlers/compositor.rs#L193">niri::Niri::queue_redraw()</a>
+する.</p>
+<p>他にも <code>queue_redraw()</code> を呼んでいるところはたくさんある. 例えばウインドウを掴んで移動しているときなどはウインドウの内容自体は変わっているとは限らないので
+<code>queue_redraw()</code> する必要がある.</p>
+<p>この様に, redraw を抑制し, 必要があるときだけ発火させるという感じでやっている. 上手いね.</p>
+<p>因みにこの挙動は terminal を開いて <code>for i in $(seq 0 10000); do echo $i; sleep 1; done</code> とかやるとわかりやすい.</p>
+<p>注意としては, niri はアニメーションもあるので
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/backend/tty.rs#L1162">アニメーション中は redraw を続ける</a>
+といった処理も必要になるあたりか.</p>
+<p>winit backend も基本は同じだが, (僕の理解では) VBlank 通知に相当する frame callback を待たずに
+<a href="https://github.com/YaLTeR/niri/blob/f203c8729a8535f6a317df5a35dc01306be2e45c/src/backend/winit.rs#L236-L240">winit::window::Window::request_redraw() している</a>.</p>
+<h2 id="anvil">Anvil</h2>
+<p><a href="https://github.com/Smithay/smithay/tree/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3">https://github.com/Smithay/smithay/tree/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3</a></p>
+<p>udev/winit backend はそれぞれ異なるループを持つ.</p>
+<p>まずは udev backend の方.</p>
+<p><a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L486">main のループ</a>
+を持つこと自体は同じ. これは簡単に <code>calloop::EventLoop::run()</code> に置き換え可能である.
+さて, この main ループ自体は rendering に絡まない. 実はもうひとつ rendering 用のループが存在する.</p>
+<ul>
+<li><a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L1361">UdevData::render()</a></li>
+<li>-&gt; <a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L1505-L1510">oneshot timer</a> if reschedule; or</li>
+<li>-&gt; <a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L866">VBlank</a></li>
+<li>---&gt; <a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/udev.rs#L1351-L1356">oneshot timer</a></li>
+</ul>
+<p>この oneshot timer のどちらかを何らかのタイミングでやめると描画されなくなる. (挙動がめちゃくちゃ追いにくい. もうちょっとなんとかならんかったんか?)</p>
+<p>このループは概ね 1/FPS 秒ごとに1周する. scan-out されるパスは VBlank に入るが, scan-out されないケースでも (例えば <code>DrmCompositor</code> を使っている場合)
+<a href="https://smithay.github.io/smithay/smithay/backend/drm/compositor/struct.DrmCompositor.html#method.render_frame">DrmCompositor::render_frame()</a>
+が呼び出される. (詳しくないのだけれど, 消費電力とか大丈夫なんですかね...?)</p>
+<p>このループが切り離されているから main ループが簡素というワケ.</p>
+<p>winit backend の場合
+<a href="https://github.com/Smithay/smithay/blob/8e49b9bb1849f0ead1ba2c7cd76802fc12ad6ac3/anvil/src/winit.rs#L248">main ループの中で render している</a>.
+この違いが backend を <code>state</code> から分離するのを難しくしている.</p>
+<h2 id="mutter-gtk">Mutter (GTK)</h2>
+<p><a href="https://gitlab.gnome.org/GNOME/mutter">https://gitlab.gnome.org/GNOME/mutter</a></p>
+<p>読もうとしたけどまったくわからん. C 言語と GObject 難しすぎひん?</p>
+<h2 id="kwin-kde">KWin (KDE)</h2>
+<p><a href="https://github.com/KDE/kwin/tree/v6.2.2">https://github.com/KDE/kwin/tree/v6.2.2</a></p>
+<p>ここから雑度が上がる.</p>
+<p><a href="https://github.com/KDE/kwin/blob/v6.2.2/src/main_wayland.cpp#L630">main ループはここ</a> で, それとは別に
+<a href="https://github.com/KDE/kwin/blob/v6.2.2/src/backends/wayland/wayland_output.h#L92">WaylandOutput が RenderLoop を保持している</a>.
+<code>RenderLoop</code> は <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/core/renderloop.cpp#L34-L41">ふたつ timer を持っている</a>.
+ふたつめの timer のことは忘れよう. (他に <code>RenderLoop::scheduleRepaint()</code> を呼び出しているの, <code>DrmOutput</code> だけだし.)</p>
+<ul>
+<li><code>compositeTimer</code></li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/core/renderloop.cpp#L190">call frameRequested()</a></li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/compositor.cpp#L89">RenderLoop::frameRequested() -&gt; Compositor::handleFrameRequested()</a></li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/compositor_wayland.cpp#L295">WaylandCompositor::composite(</a>]</li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/compositor_wayland.cpp#L372">call paintPass()</a></li>
+<li>-&gt; VBlank</li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/backends/wayland/wayland_output.cpp#L128">KWayland::Client::Surface::frameRendered() -&gt; OutputFrame::presented()</a></li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/core/renderloop.cpp#L180">RenderLoopPrivate::notifyVblank で lastPresentationTimestamp しつつ</a></li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/core/renderloop.cpp#L162">call RenderLoopPrivate::scheduleRepaint()</a></li>
+<li>-&gt; <a href="https://github.com/KDE/kwin/blob/v6.2.2/src/core/renderloop.cpp#L120">compositeTimer.start()</a></li>
+</ul>
+<p>これでループする.</p>
+<p>上では scan-out されたケースを書いたが, そうでないケースは
+<a href="https://github.com/KDE/kwin/blob/v6.2.2/src/core/renderbackend.cpp#L58-L60">OutputFrame::~OutputFrame() から RenderLoopPrivate::scheduleNextRepaint() される</a>.</p>
+<p>つまり Anvil とだいたい一緒.</p>
+<h2 id="matome">まとめ</h2>
+<p>Anvil ベースのやつを改良しようと思ったけど KWin と似た方法だしこれが特別変なことをしているわけではないっぽいことがわかってしまった.
+どうしよう... (まぁ構造をキープしつつマシにするのはどうとでもできる気はするが.)</p>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

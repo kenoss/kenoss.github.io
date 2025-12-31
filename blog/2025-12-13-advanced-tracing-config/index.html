@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+一歩踏み込んだ tracing の設定 (Rust) | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="一歩踏み込んだ tracing の設定 (Rust)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-12-13-advanced-tracing-config&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">一歩踏み込んだ tracing の設定 (Rust)</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-12-13" class="post-date" itemprop="datePublished">
+                2025-12-13
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 tracing</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <p>これは <a href="https://qiita.com/advent-calendar/2025/rust">Rust Advent Calendar 2025</a> 13日目の記事です <sup class="footnote-reference"><a href="#1">1</a></sup>.</p>
+<h2 id="intro">Intro</h2>
+<p>みなさん tracing してますか? してますよね. 私はほぼ常にしています.</p>
+<p>Rust での <a href="https://docs.rs/tracing/latest/tracing/"><code>tracing</code></a> は, ざっくり言うと</p>
+<ul>
+<li>(<a href="https://docs.rs/tracing/latest/tracing/"><code>tracing</code></a>; ライブラリやアプリ側で)
+log や span を仕込んでおき,</li>
+<li>(<a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/"><code>tracing_subscriber</code></a>; アプリ側で)
+それらを表示したりのアクションを起こす.</li>
+</ul>
+<p>仕組みです.</p>
+<p>この記事では基本的な概念, どうやったら使えるのか, 内部の仕組みについては解説せず, 仮定します. 以下の記事がおすすめです:</p>
+<ul>
+<li>そもそも tracing って何? どうやったら使えるの?
+<ul>
+<li>公式ドキュメント
+<a href="https://docs.rs/tracing/latest/tracing/"><code>tracing</code></a>,
+<a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/"><code>tracing_subscriber</code></a></li>
+<li><a href="https://techblog.paild.co.jp/entry/2024/04/02/144212">Rustでオブザーバビリティを実現するには (@ymgyt)</a></li>
+</ul>
+</li>
+<li>内部の仕組み
+<ul>
+<li><a href="https://blog.ymgyt.io/entry/how-tracing-and-tracing-subscriber-write-events/">tracing/tracing-subscriberでログが出力される仕組みを理解する (@helloyuki)</a></li>
+</ul>
+</li>
+<li>otel で使ってみたい
+<ul>
+<li><a href="https://blog.ojisan.io/rust-tracing/">Rust での tracing (@sadnessOjisan)</a></li>
+</ul>
+</li>
+</ul>
+<p>さて, <code>tracing</code> crate の使い方として最もよくあるのは
+<a href="https://docs.rs/log/latest/log/"><code>log</code></a>/<a href="https://docs.rs/env_logger/latest/env_logger/"><code>env_logger</code></a> crate
+的な挙動のために以下の様な設定を使うやつでしょう:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">allow</span><span>(unused_imports)]
+</span><span>#[</span><span style="color:#bf616a;">macro_use</span><span>]
+</span><span style="color:#b48ead;">extern crate</span><span> tracing;
+</span><span>
+</span><span style="color:#b48ead;">use</span><span> anyhow;
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">tracing_init</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">use </span><span>time::UtcOffset;
+</span><span>    </span><span style="color:#b48ead;">use </span><span>time::macros::format_description;
+</span><span>    </span><span style="color:#b48ead;">use </span><span>tracing_subscriber::EnvFilter;
+</span><span>    </span><span style="color:#b48ead;">use </span><span>tracing_subscriber::fmt::time::OffsetTime;
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let</span><span> offset = UtcOffset::current_local_offset().</span><span style="color:#96b5b4;">unwrap</span><span>();
+</span><span>    </span><span style="color:#b48ead;">let</span><span> timer = OffsetTime::new(
+</span><span>        offset,
+</span><span>        format_description!(&quot;</span><span style="color:#a3be8c;">[hour]:[minute]:[second].[subsecond digits:3]</span><span>&quot;),
+</span><span>    );
+</span><span>
+</span><span>    tracing_subscriber::fmt()
+</span><span>        </span><span style="color:#65737e;">// `RUST_LOG` 環境変数に応じてログを出力するかどうかを制御
+</span><span>        .</span><span style="color:#96b5b4;">with_env_filter</span><span>(EnvFilter::from_default_env())
+</span><span>        </span><span style="color:#65737e;">// 時刻のフォーマット変更
+</span><span>        .</span><span style="color:#96b5b4;">with_timer</span><span>(timer)
+</span><span>        </span><span style="color:#65737e;">// trace のファイル中の行数を表示
+</span><span>        .</span><span style="color:#96b5b4;">with_line_number</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>        </span><span style="color:#65737e;">// 色を付ける
+</span><span>        .</span><span style="color:#96b5b4;">with_ansi</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>        .</span><span style="color:#96b5b4;">init</span><span>();
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() -&gt; anyhow::Result&lt;()&gt; {
+</span><span>    </span><span style="color:#96b5b4;">tracing_init</span><span>();
+</span><span>
+</span><span>    </span><span style="color:#96b5b4;">hoge</span><span>()?;
+</span><span>
+</span><span>    Ok(())
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">hoge</span><span>() -&gt; anyhow::Result&lt;()&gt; {
+</span><span>    info!(&quot;</span><span style="color:#a3be8c;">log in hoge</span><span>&quot;);
+</span><span>
+</span><span>    </span><span style="color:#96b5b4;">f</span><span>(</span><span style="color:#d08770;">2</span><span>);
+</span><span>
+</span><span>    Ok(())
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">tracing</span><span>::</span><span style="color:#bf616a;">instrument</span><span>]
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">f</span><span>(</span><span style="color:#bf616a;">n</span><span>: </span><span style="color:#b48ead;">usize</span><span>) {
+</span><span>    debug!(&quot;</span><span style="color:#a3be8c;">f({n})</span><span>&quot;);
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">if</span><span> n == </span><span style="color:#d08770;">0 </span><span>{
+</span><span>        </span><span style="color:#b48ead;">return</span><span>;
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#96b5b4;">f</span><span>(n - </span><span style="color:#d08770;">1</span><span>);
+</span><span>}
+</span></code></pre>
+<p>出力サンプルはこんな感じです:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ RUST_LOG=debug cargo run
+</span><span>   Compiling hoge v0.1.0 (/home/kenoss/work/hoge)
+</span><span>    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s
+</span><span>     Running `target/debug/hoge`
+</span><span>23:33:39.858  INFO hoge: 40: log in hoge
+</span><span>23:33:39.858 DEBUG f{n=2}: hoge: 49: f(2)
+</span><span>23:33:39.858 DEBUG f{n=2}:f{n=1}: hoge: 49: f(1)
+</span><span>23:33:39.858 DEBUG f{n=2}:f{n=1}:f{n=0}: hoge: 49: f(0)
+</span></code></pre>
+<p>この記事ではここから一歩進んで, 以下の機能を足していきます:</p>
+<ul>
+<li>stdout とファイルの片方, あるいは両方に出力する.</li>
+<li>log に span context を表示しない.</li>
+<li><a href="https://perfetto.dev/">Perfetto</a>/<a href="https://ui.perfetto.dev/">Perfetto UI</a>
+で読める trace を記録する.</li>
+<li>フィルタリングを動的に on/off する.</li>
+</ul>
+<p>初手からアレなんですが, 逆に言うとこういう †変なこと† をする必要がない場合はこの記事を読む必要はないです.
+必要になってから読めばよいです.</p>
+<h2 id="versions">Versions</h2>
+<ul>
+<li><code>tracing</code>/<code>tracing_subscriber</code>: tag <a href="https://github.com/tokio-rs/tracing/tree/tracing-0.1.43"><code>tracing-0.1.43</code></a></li>
+<li>sabiniwm: commit <a href="https://github.com/kenoss/sabiniwm/tree/37b905f">37b905f</a></li>
+</ul>
+<h2 id="tracing-subscriber-fmt-woniu-jie-ku"><code>tracing_subscriber::fmt()</code> を紐解く</h2>
+<p><code>tracing</code>/<code>tracing_subscriber</code> は基本的に simple な概念の積み重ねで作られています. しかし
+<code>tracing_subscriber::fmt()</code> は違います. こいつはよくあるユースケースに特化した simple な
+インターフェースです. その範囲に収まっていれば短かく書けて便利なのですが,
+一歩踏み込もうとしたときには邪魔 <sup class="footnote-reference"><a href="#2">2</a></sup> でもあります.</p>
+<p>というわけで, まずはこれを <code>tracing_subscriber</code> の基本概念である
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/registry/struct.Registry.html"><code>Registry</code></a>
+<a href="https://docs.rs/tracing-core/0.1.35/tracing_core/subscriber/trait.Subscriber.html"><code>Subscriber</code></a>,
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/trait.Layer.html"><code>Layer</code></a>,
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/trait.Filter.html"><code>Filter</code></a>
+で書き直しましょう.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>tracing_subscriber::fmt().</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p>最小の設定はこれですが, これは次と等価です
+[<a href="https://github.com/tokio-rs/tracing/blob/64e1c8d3ae5cf5deab40ad3d376c8595d4e4db7f/tracing-subscriber/src/fmt/mod.rs#L486-L491">cs</a>].</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(fmt::Layer::default());
+</span><span>subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p><code>EnvFilter</code> を足すと</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(EnvFilter::from_default_env())
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(fmt::Layer::default());
+</span><span>subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p>になります. (<code>with_line_number()</code> などは暫く無視します.)</p>
+<p>さて, これは何をやっているのでしょうか?</p>
+<p>下から逆順に見ていくと, <code>subscriber.init()</code> は
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/util/trait.SubscriberInitExt.html#method.init"><code>SubscriberInitExt::init()</code></a>
+であり, これは trait <code>Subscriber</code> を global に set します. 変数 <code>subscriber</code> の型は (<code>tracing_subscriber::</code> は省略して)</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>layer::Layered&lt;fmt_layer::Layer&lt;???, N, E, W&gt;,
+</span><span>               layer::Layered&lt;EnvFilter,
+</span><span>                              Registry
+</span><span>                              &gt;
+</span><span>               &gt;
+</span></code></pre>
+<p>です. <a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/struct.Layered.html"><code>Layered</code></a>
+<code>layer::Layered&lt;L, I, S = I&gt;</code> は <code>L: Layer</code> と <code>S: Subscriber</code> を取って <code>Subscriber</code> を返す様なものです.
+その核になっているのは <code>Registry</code> で, これは <code>Subscriber</code> を impl しています.</p>
+<p><code>Registry</code> を使う理由は log と span はちょっと異なり span の情報を生存期間中保持しておくため...ですが,
+まぁあんまり深く考えずに取り敢えず <code>Registry</code> を使うと思っておけばよいです.
+<code>EnvFilter</code> はそこから降りてくる log/span を <code>RUST_LOG</code> 環境変数に従って filtering します <sup class="footnote-reference"><a href="#3">3</a></sup>.
+<code>fmt_layer::Layer</code> はそれらを文字列化し, stdout に書き出します.</p>
+<p>というわけで, これで <code>tracing_subscriber::fmt().init()</code> をバラせました.</p>
+<h2 id="per-layer-filtering">Per-layer filtering</h2>
+<p>さて, ここで log や span を <strong>全て</strong> 記録したいとなったときはどうすればいいのでしょう?</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(ここで log and/or span を記録する何か)
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(EnvFilter::from_default_env())
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(fmt::Layer::default());
+</span><span>subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p>filter の前に置いているから filtering はされずに全て記録できるでしょうか?
+残念ながらこれは <code>EnvFilter</code> の影響を受けます <sup class="footnote-reference"><a href="#4">4</a></sup>. (何故か?という話は控えます <sup class="footnote-reference"><a href="#5">5</a></sup>.)</p>
+<p>そこで使われるのが
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/index.html#per-layer-filtering">Per-Layer Filtering</a>
+です. 名前の通り, layer 毎に filtering を個別に持たせます:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(ここで log and/or span を記録する何か)
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(fmt::Layer::default()
+</span><span>              .</span><span style="color:#96b5b4;">with_filter</span><span>(EnvFilter::from_default_env()));
+</span><span>subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p><strong><code>tracing_subscriber::fmt().&lt;...&gt;.init()</code> で済まないときは per-layer filtering を使う.</strong>
+今日はこれだけ覚えて帰ってください.</p>
+<p>以降は全てこれを使った具体例になります.</p>
+<h2 id="stdout-and-or-file-nishu-ku">stdout and/or file に書く</h2>
+<p>プログラム開始時点での条件によって以下を切り替えたりしたいです <sup class="footnote-reference"><a href="#6">6</a></sup>.</p>
+<ul>
+<li>stdout にのみ出力する.</li>
+<li>ファイルに出力する.</li>
+<li>stdout とファイルの両方に出力する.</li>
+</ul>
+<p>これは以下の様にすればよいです.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">tracing_init</span><span>() -&gt; anyhow::Result&lt;()&gt; {
+</span><span>    </span><span style="color:#96b5b4;">macro_rules! </span><span>fmt_layer {
+</span><span>        () =&gt; {{
+</span><span>            </span><span style="color:#b48ead;">let</span><span> offset = UtcOffset::current_local_offset().</span><span style="color:#96b5b4;">unwrap</span><span>();
+</span><span>            </span><span style="color:#b48ead;">let</span><span> timer = OffsetTime::new(
+</span><span>                offset,
+</span><span>                format_description!(&quot;</span><span style="color:#a3be8c;">[hour]:[minute]:[second].[subsecond digits:3]</span><span>&quot;),
+</span><span>            );
+</span><span>
+</span><span>            tracing_subscriber::fmt::Layer::default()
+</span><span>                .</span><span style="color:#96b5b4;">compact</span><span>()
+</span><span>                .</span><span style="color:#96b5b4;">with_span_events</span><span>(tracing_subscriber::fmt::format::FmtSpan::</span><span style="color:#d08770;">NONE</span><span>)
+</span><span>                .</span><span style="color:#96b5b4;">with_ansi</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>                .</span><span style="color:#96b5b4;">with_timer</span><span>(timer)
+</span><span>                .</span><span style="color:#96b5b4;">with_level</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>                .</span><span style="color:#96b5b4;">with_target</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>                .</span><span style="color:#96b5b4;">with_file</span><span>(</span><span style="color:#d08770;">false</span><span>)
+</span><span>                .</span><span style="color:#96b5b4;">with_line_number</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>        }};
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">let </span><span>(stdout_logging, file_logging) = </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">use_file_for_logging</span><span>() {
+</span><span>        </span><span style="color:#b48ead;">const </span><span style="color:#d08770;">LOG_FILE</span><span>: &amp;</span><span style="color:#b48ead;">str </span><span>= &quot;</span><span style="color:#a3be8c;">/tmp/hoge.log</span><span>&quot;;
+</span><span>        </span><span style="color:#b48ead;">let</span><span> log_file = std::io::LineWriter::new(std::fs::File::create(</span><span style="color:#d08770;">LOG_FILE</span><span>)?);
+</span><span>        </span><span style="color:#b48ead;">let</span><span> writer = std::sync::Mutex::new(log_file);
+</span><span>        </span><span style="color:#b48ead;">let</span><span> file_logging = fmt_layer!().</span><span style="color:#96b5b4;">with_writer</span><span>(writer);
+</span><span>        (None, Some(file_logging))
+</span><span>    } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>        </span><span style="color:#b48ead;">let</span><span> stdout_logging = fmt_layer!().</span><span style="color:#96b5b4;">with_writer</span><span>(std::io::stdout);
+</span><span>        (Some(stdout_logging), None)
+</span><span>    };
+</span><span>    </span><span style="color:#b48ead;">let</span><span> env_filter = EnvFilter::from_default_env();
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            stdout_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter.</span><span style="color:#96b5b4;">clone</span><span>()),
+</span><span>        )
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            file_logging.</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter),
+</span><span>        );
+</span><span>    subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span><span>
+</span><span>    Ok(())
+</span><span>}
+</span></code></pre>
+<p>解説. これは
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/trait.Layer.html#impl-Layer%3CS%3E-for-Option%3CL%3E"><code>L: Layer&lt;S&gt;</code> のとき <code>Option&lt;L&gt;: Layer&lt;S&gt;</code></a>
+というのを利用しています. <code>None</code> のときは <strong>挙動としては</strong> <code>.with(None)</code> を書かなかった場合と同じになります.
+(返す型は異なります.) ファイル出力用の layer と stdout 出力用の layer をそれぞれ <code>Option</code> で包んで設定しています.
+その中では先程の per-layer filtering を使っています.</p>
+<p>(両方 <code>Some</code> のケースがないのであれば) こんな面倒なことをしなくてもいいのでは?と思われるかもしれません.
+<code>let logging = if ... else ... ;</code> で layer を切り替える感じですね. しかしこれはコンパイルできません.
+(<code>EnvFilter</code> の <code>Layered</code> を無視すると) 実は <code>tracing_subscriber::fmt::Layer</code> は
+<code>Layer&lt;Registry, N, E, W&gt;</code> で,
+<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/fmt/struct.Layer.html#method.with_writer"><code>.with_writer()</code></a>
+は型パラメータ <code>W</code> を変更します. stdout とファイルでこの部分が異なるので同じ変数には入れられません.</p>
+<p>型というと, (関数ではなく) <code>fmt_layer!()</code> というマクロを使っているのもポイントです.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(EnvFilter::from_default_env())
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(fmt::Layer::default());
+</span><span>subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p>の <code>subscriber</code> の型は</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>layer::Layered&lt;fmt_layer::Layer&lt;???, N, E, W&gt;,
+</span><span>               layer::Layered&lt;EnvFilter,
+</span><span>                              Registry
+</span><span>                              &gt;
+</span><span>               &gt;
+</span></code></pre>
+<p>と書きましたが, この <code>???</code> は <code>layer::Layered&lt;EnvFilter, Registry&gt;</code> です
+[<a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/fmt/struct.Layer.html#method.with_subscriber"><code>fmt::Layer::with_subscriber()</code></a>]
+[<a href="https://github.com/tokio-rs/tracing/blob/64e1c8d3ae5cf5deab40ad3d376c8595d4e4db7f/tracing-subscriber/src/layer/mod.rs#L1500-L1509"><code>SubscriberExt::with()</code></a>].
+ここには「<code>.with()</code> を付ける前の subscriber の型」が入ります. こんなの手書きしたくないですし,
+<code>.with(stdout_logging...)</code> と <code>.with(file_logging...)</code> の箇所で要求される型が異なります.
+なのでマクロにしています.</p>
+<h2 id="log-ni-span-context-wobiao-shi-sinai">log に span context を表示しない</h2>
+<p>上記 <code>fmt_layer!()</code> の部分,</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>tracing_subscriber::fmt::Layer::default()
+</span><span>    .</span><span style="color:#96b5b4;">compact</span><span>()
+</span><span>    .</span><span style="color:#96b5b4;">with_span_events</span><span>(tracing_subscriber::fmt::format::FmtSpan::</span><span style="color:#d08770;">NONE</span><span>)
+</span><span>    .</span><span style="color:#96b5b4;">with_ansi</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>    .</span><span style="color:#96b5b4;">with_timer</span><span>(timer)
+</span><span>    .</span><span style="color:#96b5b4;">with_level</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>    .</span><span style="color:#96b5b4;">with_target</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span><span>    .</span><span style="color:#96b5b4;">with_file</span><span>(</span><span style="color:#d08770;">false</span><span>)
+</span><span>    .</span><span style="color:#96b5b4;">with_line_number</span><span>(</span><span style="color:#d08770;">true</span><span>)
+</span></code></pre>
+<p>としていますが, 出力は例えば</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>...
+</span><span>23:39:47.066  INFO smithay::wayland::socket:72: Created new socket name=Some(&quot;wayland-2&quot;)
+</span><span>23:39:47.068  INFO sabiniwm::state:234: Start listening on Wayland socket: WAYLAND_DISPLAY = wayland-2
+</span><span>23:39:47.068  INFO input_seat:add_keyboard:input_keyboard: smithay::input::keyboard:672: Initializing a xkbcommon handler with keymap query name=&quot;winit&quot; xkb_config=XkbConfig { rules: &quot;&quot;, model: &quot;&quot;, layout: &quot;custom&quot;, variant: &quot;&quot;, options: None } repeat_delay=200 repeat_rate=60
+</span><span>23:39:47.073  INFO input_seat:add_keyboard:input_keyboard: smithay::input::keyboard:680: Loaded Keymap name=&quot;Modifiers for MacBookAir&quot; name=&quot;winit&quot; xkb_config=XkbConfig { rules: &quot;&quot;, model: &quot;&quot;, layout: &quot;custom&quot;, variant: &quot;&quot;, options: None } repeat_delay=200 repeat_rate=60
+</span><span>23:39:47.078  INFO smithay::xwayland::xserver:187: spawning XWayland instance
+</span><span>...
+</span></code></pre>
+<p>などとなります. 3行目と4行目はそれ以外と異なり <code>input_seat:add_keyboard:input_keyboard:</code> と表示されていますが,
+これは log されたときの道中の span を表しています.</p>
+<p>しかしこれ, 結構邪魔です. span は必要なときは別途 perfetto で見るつもりだし, log はコンパクトに
+表示したい. ではどうやって消すか?</p>
+<p>実はこれ簡単には消せません. <code>tracing_subscriber::fmt::Layer</code> は色々オプションを持っていますが,
+<a href="https://github.com/tokio-rs/tracing/blob/64e1c8d3ae5cf5deab40ad3d376c8595d4e4db7f/tracing-subscriber/src/fmt/format/mod.rs#L1094-L1104">FmtCtx</a>
+には表示を弄るオプションがありません. 困りましたね... 自作 formatter を作るしかないのでしょうか...?</p>
+<p>いや, この場合はできます. そう, filter ならね!</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#65737e;">/// Filters out span context for event logging
+</span><span style="color:#b48ead;">pub struct </span><span>NoSpanContextFilter;
+</span><span>
+</span><span style="color:#b48ead;">impl</span><span>&lt;S&gt; tracing_subscriber::layer::Filter&lt;S&gt; </span><span style="color:#b48ead;">for </span><span>NoSpanContextFilter
+</span><span style="color:#b48ead;">where
+</span><span>    S: tracing::Subscriber + </span><span style="color:#b48ead;">for</span><span>&lt;</span><span style="color:#b48ead;">&#39;a</span><span>&gt; tracing_subscriber::registry::LookupSpan&lt;</span><span style="color:#b48ead;">&#39;a</span><span>&gt;,
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">enabled</span><span>(
+</span><span>        &amp;</span><span style="color:#bf616a;">self</span><span>,
+</span><span>        </span><span style="color:#bf616a;">metadata</span><span>: &amp;tracing_core::Metadata&lt;&#39;_&gt;,
+</span><span>        </span><span style="color:#bf616a;">_cx</span><span>: &amp;tracing_subscriber::layer::Context&lt;&#39;_, S&gt;,
+</span><span>    ) -&gt; </span><span style="color:#b48ead;">bool </span><span>{
+</span><span>        !metadata.</span><span style="color:#96b5b4;">is_span</span><span>()
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>...
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            stdout_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter.</span><span style="color:#96b5b4;">clone</span><span>())
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(NoSpanContextFilter),
+</span><span>        )
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            file_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter)
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(NoSpanContextFilter),
+</span><span>        );
+</span><span>
+</span><span>...
+</span></code></pre>
+<p><code>Filter::enabled()</code> で span のときに false を返しています. こうすることで
+<code>tracing_subscriber::fmt::Layer</code> に一切 span を渡さず, span 由来の表示を消せます.</p>
+<h2 id="perfetto-no-trace-file-wotu-ku">Perfetto の trace file を吐く</h2>
+<p>Perfetto というのは, span/log を可視化してくれる君です. 詳しくは公式ドキュメントで.</p>
+<p>使い始めるのは簡単です. layer を追加するだけですね.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>...
+</span><span>    </span><span style="color:#b48ead;">use </span><span>tracing_perfetto::PerfettoLayer;
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let</span><span> perfetto_tracing = </span><span style="color:#b48ead;">match </span><span>std::env::var(&quot;</span><span style="color:#a3be8c;">HOGE_PFTRACE_PATH</span><span>&quot;) {
+</span><span>        Err(std::env::VarError::NotPresent) | Err(std::env::VarError::NotUnicode(_)) =&gt; None,
+</span><span>        Ok(path) =&gt; {
+</span><span>            </span><span style="color:#b48ead;">let</span><span> file = std::fs::File::create(path)?;
+</span><span>            Some(PerfettoLayer::new(std::sync::Mutex::new(file)))
+</span><span>        }
+</span><span>    };
+</span><span>
+</span><span>...
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(perfetto_tracing)
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            stdout_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter.</span><span style="color:#96b5b4;">clone</span><span>())
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(NoSpanContextFilter),
+</span><span>        )
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            file_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter)
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(NoSpanContextFilter),
+</span><span>        );
+</span><span>
+</span><span>...
+</span></code></pre>
+<p>簡単とは言いましたが, 自分はハマりました. 前述の</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(ここで log and/or span を記録する何か)
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(EnvFilter::from_default_env())
+</span><span>    .</span><span style="color:#96b5b4;">with</span><span>(fmt::Layer::default());
+</span><span>subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span></code></pre>
+<p>に引っ掛かって <code>EnvFilter</code> で filtering されてしまったのです. 上で単に追加するだけで済んだのは,
+既に per-filter filtering を使っていたからです.</p>
+<p><strong><code>tracing_subscriber::fmt().&lt;...&gt;.init()</code> で済まないときは per-layer filtering を使う.</strong>
+でないとこういう罠にハマることになります. これだけははっきりと真実を伝えたかった <sup class="footnote-reference"><a href="#7">7</a></sup>.</p>
+<h2 id="rust-deno-perfetto-nituite">Rust での perfetto について</h2>
+<p>Perfetto は Rust の tracing とあんまり相性が良くない <sup class="footnote-reference"><a href="#8">8</a></sup>.</p>
+<p>Perfetto には category とか track とか flow とかの独自概念がある
+[<a href="https://perfetto.dev/docs/instrumentation/track-events">doc</a>].
+category はまぁなくても env filter とかで代用できる.
+しかし track/flow は代替手段がないし, 是非使いたい.</p>
+<p>では Rust でのサポート状況はというと...</p>
+<ul>
+<li><a href="https://github.com/google/perfetto">perfetto-sdk</a>
+<ul>
+<li>Google 公式.</li>
+<li>C++ と同様のマクロで記録.</li>
+<li><a href="https://github.com/google/perfetto/blob/v53.0/contrib/rust-sdk/perfetto/src/track_event.rs#L1441-L1452">flow サポートなし.</a>
+Google 氏〜〜〜 がんばってくれ〜〜〜</li>
+</ul>
+</li>
+<li><a href="https://github.com/csmoe/tracing-perfetto">tracing-perfetto</a>
+<ul>
+<li>flow サポートはできない/してないはず <sup class="footnote-reference"><a href="#9">9</a></sup>.</li>
+</ul>
+</li>
+<li><a href="https://github.com/modal-labs/tracing-perfetto-sdk">tracing-perfetto-sdk-layer</a>
+<ul>
+<li>flow サポートはできない/してないはず.</li>
+</ul>
+</li>
+<li><a href="https://github.com/davidlattimore/perfetto-recorder">perfetto-recorder</a>
+<ul>
+<li><code>tracing</code> ではない, 独自マクロで記録.</li>
+<li><a href="https://github.com/davidlattimore/perfetto-recorder?tab=readme-ov-file#performance">tracing 系のやつらが遅いから</a> らしい.</li>
+<li><a href="https://github.com/davidlattimore/perfetto-recorder?tab=readme-ov-file#unsupported-features">flow サポートなし.</a></li>
+</ul>
+</li>
+</ul>
+<p>そう! 誰もサポートしていないのである! <sup class="footnote-reference"><a href="#10">10</a></sup></p>
+<p>う〜ん, 困りました. 困ったので今年はもう寝ます.</p>
+<h2 id="perfetto-deno-trace-qu-de-wodong-de-niqie-riti-eru">Perfetto での trace 取得を動的に切り替える</h2>
+<p>さて, Chromium/Chrome では chrome://traring を開いて起動後に動的に recording を開始/停止することができます
+[<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/services/tracing/perfetto/README.md">doc</a>].
+当然この機能も欲しいですよね.</p>
+<p>on/off などのインターフェースはアプリケーション毎に大きく変わるでしょうから, sabiniwm での例を見ましょう
+[<a href="https://github.com/kenoss/sabiniwm/blob/37b905f1be292355dd12194a50f6ab64a1975cae/crates/sabiniwm_pistachio/src/main.rs#L32">cs</a>].</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">tracing_init</span><span>() -&gt; eyre::Result&lt;Option&lt;ToggleFilterHandle&lt;Registry&gt;&gt;&gt; {
+</span><span>
+</span><span>...
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">use </span><span>sabiniwm_tracing_helper::debug::ToggleFilter;
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let </span><span>(perfetto_toggle_filter, perfetto_toggle_handle) = ToggleFilter::new(</span><span style="color:#d08770;">false</span><span>);
+</span><span>
+</span><span>...
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">let</span><span> subscriber = Registry::default()
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(perfetto_tracing.</span><span style="color:#96b5b4;">with_filter</span><span>(perfetto_toggle_filter))
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            stdout_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter.</span><span style="color:#96b5b4;">clone</span><span>())
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(NoSpanContextFilter),
+</span><span>        )
+</span><span>        .</span><span style="color:#96b5b4;">with</span><span>(
+</span><span>            file_logging
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(env_filter)
+</span><span>                .</span><span style="color:#96b5b4;">with_filter</span><span>(NoSpanContextFilter),
+</span><span>        );
+</span><span>    subscriber.</span><span style="color:#96b5b4;">init</span><span>();
+</span><span>
+</span><span>    Ok(Some(perfetto_toggle_handle))
+</span><span>}
+</span></code></pre>
+<p>もう詳しい説明は要らないでしょう. on/off 可能な filter <code>ToggleFilter</code> とその handle のペアを作り,
+必要なときだけ on にして event を流すようにしています. sabiniwm ではこの handle を <code>Action</code> にして
+キーバインドから実行可能にしています.</p>
+<h2 id="matome">まとめ</h2>
+<ul>
+<li><code>tracing_subscriber</code> では <code>Registry</code>, <code>Subscriber</code>, <code>Layer</code>, <code>Filter</code> が肝要.</li>
+<li><strong><code>tracing_subscriber::fmt().&lt;...&gt;.init()</code> で済まないときは per-layer filtering を使う.</strong></li>
+<li>あとは <code>Layer</code> とか <code>Filter</code> を見ていけば色々やりたい拡張を実現できる.</li>
+</ul>
+<p>年末ですし皆さんもご自身の tracing 設定を確認されてみてはいかがでしょうか?</p>
+<p>Happy holidays!</p>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>なお Seriese 2 の方の 13 日目の記事は
+<a href="https://zenn.dev/oyatomo/articles/9cebd37807cd4c">Ray Tracing from Scratch in Rust ~ 簡易CPUレンダラの自作と仕組みの勉強 ~</a>
+です. tracing 違いですね.</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>実際, <code>tracing_subscriber</code> では <code>Registry</code>, <code>Subscriber</code>, <code>Layer</code>, <code>Filter</code> が肝要ですし
+公式ドキュメントもこのあたりの概念に沿って書かれていますが, <code>tracing_subscriber::fmt()</code>
+はこれら全てを覆い隠しているため「うーんドキュメントに書いてあるこれはどこ?」となります.
+なった.</p>
+</div>
+<div class="footnote-definition" id="3"><sup class="footnote-definition-label">3</sup>
+<p>これは嘘.</p>
+</div>
+<div class="footnote-definition" id="4"><sup class="footnote-definition-label">4</sup>
+<p>「じゃあ『Layer』って何だよ! なんで Layer って名前なんだよ!」と思いますが, 歴史の話を追うのは
+めんどくさそうなのでやめておきます. 調べてる時間ないし. 詳しい方がいたら教えてください.
+(まぁ短絡評価したりするところとかは Layer って感じはするし, それ言ったら
+<code>tracing_subscriber::fmt::Layer</code> は Layer という名前が適切なんか?という話には, なる.)</p>
+</div>
+<div class="footnote-definition" id="5"><sup class="footnote-definition-label">5</sup>
+<p><a href="https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/index.html#global-filtering">https://docs.rs/tracing-subscriber/0.3.22/tracing_subscriber/layer/index.html#global-filtering</a></p>
+</div>
+<div class="footnote-definition" id="6"><sup class="footnote-definition-label">6</sup>
+<p>具体的には, sabiniwm では udev backend (TTY から起動) のときは file に書き,
+winit backend のときは stdout に出しています.</p>
+</div>
+<div class="footnote-definition" id="7"><sup class="footnote-definition-label">7</sup>
+<p>実際, これがこの記事を書こうと思った決め手です.</p>
+</div>
+<div class="footnote-definition" id="8"><sup class="footnote-definition-label">8</sup>
+<p>概念的にもはまらないし, インターフェース的にも無理な気がする?
+ライブラリで <code>tracing</code> 使ってるの自体は変更できないので, <code>tracing</code> を基本にしつつアプリ側で
+必要なところは <code>trace_event/trace_event_begin/trace_event_end</code> を使うとかが理想ではあります.</p>
+</div>
+<div class="footnote-definition" id="9"><sup class="footnote-definition-label">9</sup>
+<p>一応 src/perfetto.protos.rs までは来ているが, これは自動生成ってだけだろうし.</p>
+</div>
+<div class="footnote-definition" id="10"><sup class="footnote-definition-label">10</sup>
+<p>誰かサポート済みだったら, スマン.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+Re: RealWorld 業務 Rust (業務以外編) | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="Re: RealWorld 業務 Rust (業務以外編)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2024-12-27-re-real-world-gyomu-rust&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">Re: RealWorld 業務 Rust (業務以外編)</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2024-12-27" class="post-date" itemprop="datePublished">
+                2024-12-27
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <h2 id="korehahe">これは何?</h2>
+<p><a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94">RealWorld 業務 Rust</a>
+に乗っかって普段から考えているなんやかんやを参照可能にしておく. 主に情報の補足と極論の補正 <sup class="footnote-reference"><a href="#1">1</a></sup>.
+但し業務というコンテキストは外してだいたいいつでも適用できるようにする.</p>
+<p>legokichi さんの考えには少なからず影響されていることに注意.</p>
+<p>皆も自分なりの考えを書こう!</p>
+<p>(<a href="https://x.com/keno_ss/status/1775142778777039141">これ</a> とかもどこかにまとめたいわね...)</p>
+<h2 id="re-docker-debirudodekiruyounisitoke">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#docker-%E3%81%A7%E3%83%93%E3%83%AB%E3%83%89%E3%81%A7%E3%81%8D%E3%82%8B%E3%82%88%E3%81%86%E3%81%AB%E3%81%97%E3%81%A8%E3%81%91">docker でビルドできるようにしとけ</a></h2>
+<p>docker でビルドできるようにしておくこと自体は大事なんだけど, 最近は Asahi Linux (aarch64) があり
+docker が絶対とは言えなくなってきた. そんなマイナー環境使う方が悪い? それはそう... (なので x86_64 環境も持っている.)</p>
+<p>なお今年の ISUCON14 では <a href="https://github.com/cross-rs/cross"><code>cross</code></a> を使った.
+メンバーが Linux (x86_64), MacOS (Apple Silicon), Linux (aarch64+x86_64) だったので <sup class="footnote-reference"><a href="#2">2</a></sup>.</p>
+<h2 id="re-cargo-fmt-and-clippy">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#ci-%E3%81%A7-cargo-fmt-%E3%82%92%E3%83%81%E3%82%A7%E3%83%83%E3%82%AF%E3%81%97%E3%82%8D">cargo fmt</a> and <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#ci-%E3%81%A7-cargo-clippy---tests---examples-----dclippyall-%E3%81%97%E3%82%8D">clippy</a></h2>
+<p>割と有名所が使ってなくて辛い.</p>
+<p>補足として, 単に <code>cargo fmt</code> や <code>cargo clippy</code> ではなく何らかのフラグを付けるなら <a href="https://github.com/casey/just"><code>just</code></a>
+か何かを使って CI と手動での結果を一致させるべき.
+(<a href="https://x.com/keno_ss/status/1796144317502759082">過去にそういうリポジトリがあった</a>.)</p>
+<p><code>RUSTFLAGS='-D warnings'</code> を付けると warning を絶許にできるのでおすすめ.
+但し <code>RUSTFLAGS</code> を使ったり弄ったりすると再ビルドすることになる. なので <code>CARGO_TARGET_DIR</code> を併用するとべんり:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>export CARGO_TARGET_DIR=target/check-strict RUSTFLAGS=&#39;-D warnings&#39;; cargo build &amp;&amp; cargo clippy --tests --examples &amp;&amp; cargo fmt -- --check
+</span></code></pre>
+<p>僕はこれを <a href="https://github.com/kenoss/thin_delegate/blob/v0.0.3/justfile#L1-L5">justfile に check-strict で登録</a> <sup class="footnote-reference"><a href="#3">3</a></sup> しておいて
+<code>cargo watch -c -s 'cargo build &amp;&amp; cargo nextest run --status-level=fail &amp;&amp; just check-strict'</code> してる.
+(具体的なコマンドは場合によって変える.)</p>
+<p>これは <code>cargo fmt</code> だけではなく build/test などについても言える.
+関る全員が常にシンプルなコマンド群の下で作業できるようにするべきだ.</p>
+<p>ところでオレオレフォーマットを主張したくないから
+<a href="https://github.com/rust-lang/rustfmt/pull/6165">rustfmt にバグ修正の PR を投げている</a>
+んだけど review bandwidth がないと言われています. わりと困り, 困る.
+(いやまぁ向こうの事情も汲むが, このサイズの PR でそう言われてもな...)</p>
+<h2 id="re-konpairuerahayi-fan-shang-noerakarashun-fan-nizhi-se">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E3%82%B3%E3%83%B3%E3%83%91%E3%82%A4%E3%83%AB%E3%82%A8%E3%83%A9%E3%83%BC%E3%81%AF%E4%B8%80%E7%95%AA%E4%B8%8A%E3%81%AE%E3%82%A8%E3%83%A9%E3%83%BC%E3%81%8B%E3%82%89%E9%A0%86%E7%95%AA%E3%81%AB%E7%9B%B4%E3%81%9B">コンパイルエラーは一番上のエラーから順番に直せ</a></h2>
+<p><code>head</code> については <code>just check-warn</code> で見えるようにしたけどあんまり使ってないな...
+安定期に入るとそこまで長いエラーが出なくなって, <code>cargo watch</code> で <code>clear</code> と <code>tmux</code> 上連打で十分になってしまった.
+(<code>head</code> だと肝心の部分が途切れたりして二度手間.)</p>
+<h2 id="re-rust-analyzer-halai-rininaranai">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#rust-analyzer-%E3%81%AF%E9%A0%BC%E3%82%8A%E3%81%AB%E3%81%AA%E3%82%89%E3%81%AA%E3%81%84">rust-analyzer は頼りにならない</a></h2>
+<p>前述の通り <code>cargo watch</code> を使っている.
+<code>alacritty/tmux (git 操作とか手動でテストとか)</code>, <code>emacs</code>, <code>alacritty/tmux (cargo watch とか)</code> と並べている.</p>
+<p>このやり方の利点はどこでもどんなプロジェクトでも応用が効くことだ. LSP を使えない荒野はたくさんある.
+(いや, 使えるときは使った方が良いとは思う. 僕は設定するのが面倒で先延ばしにしているだけ...)</p>
+<h2 id="re-result-result-t-customerror-anyhow-error-backtrace">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E3%82%A8%E3%83%A9%E3%83%BC%E3%81%AE%E5%9E%8B%E3%81%AF-resultresultt-customerror-anyhowerror-%E3%81%A7fa"><code>Result&lt;Result&lt;T, CustomError&gt;, anyhow::Error&gt;</code></a>, <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E6%9C%AC%E7%95%AA%E7%92%B0%E5%A2%83%E3%81%A7%E3%82%82%E5%B8%B8%E3%81%AB-rust_backtrace1-%E3%81%A7%E5%AE%9F%E8%A1%8C%E3%81%97%E3%82%8D">backtrace</a></h2>
+<p>Rust は <code>Result</code> や <code>Option</code> があるが, 現実的に panic をなくせるわけではない.
+例えば index access <code>xs[i]</code> で panic するケースはプログラムのバグだから回復不可能である. なので (普通) panic するべきだ.
+偉人たちも panic すべきときは panic せよと言っている.
+[<a href="https://burntsushi.net/unwrap/">BurntSushi</a>]
+[<a href="https://blog.cardina1.red/2019/12/19/dont-fear-the-panic/">lo48576</a>]
+しなければ逆に全てが <code>Result</code> になる.</p>
+<p>もちろん <code>Result&lt;Result&lt;T, CustomError&gt;, anyhow::Error&gt;</code> の様にハンドリングすべきときも確かにある.
+HTTP サーバーとか. しかしそれが全てではない.</p>
+<p>僕は panic が許容できるアプリケーションを書くときは
+<a href="https://github.com/kenoss/sabiniwm/blob/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed/crates/sabiniwm/src/util/panic.rs#L7">こんな風に <code>std::panic::set_hook()</code> を使って <code>tracing::error!()</code> する</a>
+ようにしている. 例えば sabiniwm では
+<a href="https://github.com/kenoss/sabiniwm/blob/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed/crates/sabiniwm-pistachio/src/main.rs#L45-L47">udev backend で動作しているときは <code>/tmp/sabiniwm.log</code> に向けて <code>tracing_subscriber</code> を設定しておき</a>,
+ビルドマシンで実行してそれを Asahi Linux 側から <code>ssh</code> して <code>tail -F /tmp/sabiniwm.log</code> して見るようにしている.
+(TTY から起動していると console がぶっこわれて読めないことがあるし, tmux 噛ますと Wayland compositor を起動できないため.
+Asahi Linux で実働させているときもデバッグ用に使える.)
+マルチスレッドプログラムの場合はここで全イベントループを停止させるのもやっている <sup class="footnote-reference"><a href="#4">4</a></sup>.</p>
+<p>ISUCON14 でも (otel と合わせて) これで効率的にデバッグできたケースがあった. (絶対に成功する <code>HashMap::get().unwrap()</code> を書いたつもりだったが仮定が偽だった.)</p>
+<p>まぁでも業務 HTTP サーバーだと結局 Sentry とかを使えという話になるのかも.</p>
+<h2 id="re">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#huga-%E3%81%BF%E3%81%9F%E3%81%84%E3%81%AA-the-question-mark-operator-%E3%82%92%E3%81%9D%E3%81%AE%E3%81%BE%E3%81%BE%E4%BD%BF%E3%81%86%E3%81%AA"><code>?</code></a></h2>
+<p>なお最近は <code>anyhow</code> も <code>eyre</code> も backtrace を capture する.
+[<a href="https://github.com/dtolnay/anyhow/blob/1.0.95/README.md?plain=1#L80"><code>anyhow</code></a>]
+[<a href="https://github.com/eyre-rs/eyre/blob/v0.6.8/src/lib.rs#L20"><code>color-eyre</code></a>]
+<code>.context()</code>/<code>.wrap_err()</code> はあくまで情報を付け足すべきときに使うで良い.
+(でも僕はまだ (上述の <code>set_hook()</code> を書いた 2023 時点では) <code>std::backtrace</code> に満足できていなかったので <code>backtrace</code> crate を使っているよ...)</p>
+<p>thiserror は
+<a href="https://github.com/dtolnay/thiserror/blob/master/README.md?plain=1#L140"><code>#[backtrace]</code> attribute でマークされている</a>
+場合に capture してくれる.
+しかしこれは nightly で <code>#![feature(error_generic_member_access)]</code> を指定する必要がある.
+仕方がないので ISUCON14 では以下の様にした:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#65737e;">// lib.rs
+</span><span>
+</span><span style="color:#65737e;">// Cargo.toml で feature &quot;debug&quot; を追加しておく.
+</span><span>
+</span><span>#![</span><span style="color:#bf616a;">cfg_attr</span><span>(feature = &quot;</span><span style="color:#a3be8c;">debug</span><span>&quot;, </span><span style="color:#bf616a;">feature</span><span>(error_generic_member_access))]
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">cfg</span><span>(</span><span style="color:#bf616a;">not</span><span>(feature = &quot;</span><span style="color:#a3be8c;">debug</span><span>&quot;))]
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(Debug, thiserror::Error)]
+</span><span style="color:#b48ead;">pub enum </span><span>Error {
+</span><span>    #[</span><span style="color:#bf616a;">error</span><span>(&quot;</span><span style="color:#a3be8c;">SQLx error: {0}</span><span>&quot;)]
+</span><span>    Sqlx(#[</span><span style="color:#bf616a;">from</span><span>] sqlx::Error),
+</span><span>...
+</span><span>}
+</span><span>#[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">debug</span><span>&quot;)]
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(Debug, thiserror::Error)]
+</span><span style="color:#b48ead;">pub enum </span><span>Error {
+</span><span>    #[</span><span style="color:#bf616a;">error</span><span>(&quot;</span><span style="color:#a3be8c;">SQLx error: {0}, backtrace = </span><span style="color:#96b5b4;">\n</span><span style="color:#a3be8c;">{1}</span><span>&quot;)]
+</span><span>    Sqlx(#[</span><span style="color:#bf616a;">from</span><span>] sqlx::Error, std::backtrace::Backtrace),
+</span><span>...
+</span><span>}
+</span></code></pre>
+<pre data-lang="justfile" style="background-color:#2b303b;color:#c0c5ce;" class="language-justfile "><code class="language-justfile" data-lang="justfile"><span># justfile
+</span><span>
+</span><span>deploy:
+</span><span>  cd webapp/rust &amp;&amp; cross build --release
+</span><span>  just deploy-aux
+</span><span>
+</span><span>deploy-debug:
+</span><span>  cd webapp/rust &amp;&amp; cross +nightly build --features debug
+</span><span>  rm webapp/rust/target/x86_64-unknown-linux-gnu/release/isuride
+</span><span>  mv webapp/rust/target/x86_64-unknown-linux-gnu/{debug,release}/isuride
+</span><span>  just deploy-aux
+</span></code></pre>
+<p>早く安定化してくれ〜〜〜</p>
+<h2 id="qing-lu-niquan-tewo-use-surunapai-soregasono-file-module-de-unique-defu-shu-hui-chu-tekitekatu-pub-trait-ding-yi-nozhong-denakerebamaaiinziyanewen-jian-pai">軽率に全てを <code>use</code> するな派 それがその file/module で unique で複数回出てきてかつ pub trait 定義の中でなければまぁいいんじゃね穏健派</h2>
+<p>Re: <code>use</code> について [<a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#alias-%E3%81%AF%E4%BD%BF%E3%81%86%E3%81%AA">1</a>][<a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%85%88%E9%A0%AD%E3%81%A7-use-%E3%81%AF%E4%BD%BF%E3%81%86%E3%81%AA">2</a>][<a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%85%88%E9%A0%AD%E3%81%A7-use-%E3%81%AF%E4%BD%BF%E3%81%86%E3%81%AA">3</a>]</p>
+<p>ところで、<a href="https://github.com/Smithay/smithay/blob/2eddf12d296b8930fd882d30366b8b9a683aae75/anvil/src/udev.rs">この <code>use</code></a> を見てくれ。こいつをどう思う？<br />
+すごく・・・大きいです・・・ <sup class="footnote-reference"><a href="#5">5</a></sup></p>
+<p>この中で <code>Device</code> 概念は少なくとも</p>
+<ul>
+<li><a href="https://docs.rs/smithay/latest/smithay/backend/input/trait.Device.html"><code>smithay::backend::input::Device</code></a></li>
+<li><a href="https://docs.rs/drm/latest/drm/trait.Device.html"><code>smithay::reexports::drm::Device</code></a></li>
+<li><a href="https://docs.rs/drm/latest/drm/control/trait.Device.html"><code>smithay::reexports::drm::control::Device</code></a></li>
+<li><a href="https://docs.rs/gbm/latest/gbm/struct.Device.html"><code>smithay::reexports::gbm::Device</code></a></li>
+<li><a href="https://docs.rs/input/latest/input/struct.Device.html"><code>smithay::reexports::input::Device</code></a></li>
+<li><a href="https://docs.rs/libseat/latest/libseat/struct.Device.html"><code>smithay::reexports::libseat::Device</code></a></li>
+<li><a href="https://docs.rs/udev/latest/udev/struct.Device.html"><code>smithay::reexports::udev::Device</code></a></li>
+</ul>
+<p>がある. マジわけわかんねぇ!!</p>
+<p>だからデフォルトでは full path で書いてくれ <sup class="footnote-reference"><a href="#6">6</a></sup>.</p>
+<p>短い名前で <code>use</code> するための僕の判断基準は概ね</p>
+<ul>
+<li>その概念が file/module で unique である; and</li>
+<li>それが複数回使われる; and</li>
+<li>not (pub trait の中である).</li>
+</ul>
+<p><code>Mutex</code> とか <code>crossbeam::channel</code> とかは別にいいんじゃないですかね? async/await を使っているか否かというのはそのアプリケーションの方針から
+unique に判定可能で頭にキャッシュされていると期待できるから. (違う方を使ったときだけ full path で書けばよい.)
+でも <a href="https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.channel.html?search=channel">tokio の channel は複数ある</a> ので許されない.
+<code>Result</code> はケースバイケースかな.</p>
+<p><code>log</code>/<code>traicng</code> は
+<a href="https://github.com/kenoss/sabiniwm/blob/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed/crates/sabiniwm/src/lib.rs#L5-L7">{lib,main}.rs の先頭で <code>#[macro_use]</code> している</a>.
+<code>log</code>/<code>tracing</code> を使わない奴はいない.
+デバッグ中に「ここに <code>info!(...)</code> を書きたいなぁ〜」と思ったときに <code>use しろ</code> と言われるとささくれにひっかかった気分になる.
+ISUCON の参考実装でもこうしてくれ〜〜〜</p>
+<p>最後のやつは trait をコピペするためである.
+<a href="https://github.com/kenoss/sabiniwm/blob/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed/crates/sabiniwm/src/config.rs#L10">このへん</a>.
+でも他人 (のリポジトリ) は制御できないから
+<a href="https://github.com/kenoss/thin_delegate/blob/main/tests/ui/pass_external_trait_def_with_uses.rs#L28-L55">こういう対応</a>
+をせざるを得ない.</p>
+<p>関数/block の中ならそこそこゆるゆるで OK.</p>
+<h2 id="re-macro-trait-hashi-una">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E3%83%9E%E3%82%AF%E3%83%AD%E3%81%AF%E4%BD%BF%E3%81%86%E3%81%AA">macro</a>/<a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#%E3%82%AA%E3%83%AC%E3%82%AA%E3%83%AC-trait-%E3%81%AF%E4%BD%BF%E3%81%86%E3%81%AA">trait</a> は使うな</h2>
+<p>ところで <a href="https://github.com/Smithay/smithay/blob/2eddf12d296b8930fd882d30366b8b9a683aae75/src/backend/renderer/element/mod.rs#L1348">こいつを</a> (ry</p>
+<p>とても人間には読めないとは思うのだけれど, これを書いた人にはそれなりの事情があるのだと思う.
+(特に業務では) 理想的ではなくともパワーで解決すべきときというのは確かにあり, そういうのを否定する気持ちにはなれない.</p>
+<p>いつ YAGNI/KISS に倒すか/パワーで解決するか/抽象化で解決するかというのは個別の例を見ないとなんとも言えない.</p>
+<p>legokichi さんには legokichi さんの文脈があるんだけれども, 業務だとうかつにコード出せないから残念...</p>
+<p>チームで対話しろ. style guide を書け. Pros/cons を明確に言語化して「決め」の合意を取れ.
+[<a href="https://google.github.io/styleguide/cppguide.html">example 1</a>]
+[<a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++.md">example 2</a>]
+最初は完璧でなくてもよい. 誰かが明確化したいと思ったときの障壁をあらかじめ取り除いておけ.</p>
+<p>(というわけで皆も自分の判断基準を書こう! 例を出せる人は是非例を挙げて.)</p>
+<h2 id="re-builder-pattern-hakuso">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#builder-pattern-%E3%81%AF%E3%82%AF%E3%82%BD">Builder Pattern はクソ</a></h2>
+<p><a href="https://xaeroxe.github.io/init-struct-pattern/#:~:text=UPDATE">「でも Xaeroxe 氏って確か Builder Pattern に鞍替えしたんだよね」</a>
+と記憶してたけど, <a href="https://github.com/rust-lang/rfcs/blob/master/text/0736-privacy-respecting-fru.md">rfcs#0736</a>
+って Init Struct Pattern 関係なくない...? (Init struct は全フィールド <code>pub</code> なはずなので.)</p>
+<h2 id="re-println-suruna-log-debug-siro">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#println-%E3%81%99%E3%82%8B%E3%81%AA-logdebug-%E3%81%97%E3%82%8D">println するな log::debug しろ</a></h2>
+<p>最近なら <code>tracing</code> crate を使うでいい気がする. span も扱えるし <sup class="footnote-reference"><a href="#7">7</a></sup>.</p>
+<p>たま〜に <code>tracing_subscriber</code> の設定が面倒で移行してないという話を聞く.
+こんな設定に著作権は発生しない <sup class="footnote-reference"><a href="#8">8</a></sup> ので適当にそのへんのアプリケーションからコピペしてくればよろしい <sup class="footnote-reference"><a href="#9">9</a></sup>.</p>
+<p><code>debug!</code> より <code>info!</code> か <code>warn!</code> を使うことが多いかなぁ.
+雑に <code>RUST_LOG=debug</code> と書くと依存 crate の <code>debug!</code> が出てきて面倒だったりするので.</p>
+<h2 id="re-let-hoge-niyoru-shu-fu-hashi-una-hoge-mitainiming-qian-wotukero">Re: <a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#let-_--hoge-%E3%81%AB%E3%82%88%E3%82%8B-_-%E6%9D%9F%E7%B8%9B%E3%81%AF%E4%BD%BF%E3%81%86%E3%81%AA-_hoge-%E3%81%BF%E3%81%9F%E3%81%84%E3%81%AB%E5%90%8D%E5%89%8D%E3%82%92%E3%81%A4%E3%81%91%E3%82%8D"><code>let _ = hoge()</code> による <code>_</code> 束縛は使うな <code>_hoge</code> みたいに名前をつけろ</a></h2>
+<p>でも現代においては全人類
+<a href="https://blog.idein.jp/post/644161837029605376/rust%E3%81%AB%E3%81%8A%E3%81%91%E3%82%8Birrefutable-pattern%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%9F%E3%82%A4%E3%83%87%E3%82%A3%E3%82%AA%E3%83%A0">pandaman さんの記事</a>
+を読んでるから別によくね?</p>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>これは僕の Rust 歴が浅いという理由が大きそう. 始めたのは 2019/10 あたりだったから async/await が stable に来る直前だったし
+<a href="https://qiita.com/legokichi/items/d4819f7d464c0d2ce2b8">error 周り</a> も thiserror/anyhow を使うで決着ついてる頃
+(な気がする)</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>ISUCON14 反省記事は...感想戦が終わったら出るかもしれないし出ないかもしれない.</p>
+</div>
+<div class="footnote-definition" id="3"><sup class="footnote-definition-label">3</sup>
+<p>今見たら <code>--tests --examples</code> が付いていませんでした. 申し訳ない...</p>
+</div>
+<div class="footnote-definition" id="4"><sup class="footnote-definition-label">4</sup>
+<p>連鎖できる cancellation token みたいなやつの root をここで作っておき, panic_hook に入ったときに cancel する.
+自作テキストエディタと自作 watchexec でしか使ってないから例が出せない...</p>
+</div>
+<div class="footnote-definition" id="5"><sup class="footnote-definition-label">5</sup>
+<p>と思ったが legokichi さんも smithay を例に挙げていた. わかるよ...</p>
+</div>
+<div class="footnote-definition" id="6"><sup class="footnote-definition-label">6</sup>
+<p><a href="https://github.com/kenoss/sabiniwm/blob/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed/crates/sabiniwm/src/backend/udev.rs#L47-L48">ごめんまだ直してなかった</a>.
+直します...</p>
+</div>
+<div class="footnote-definition" id="7"><sup class="footnote-definition-label">7</sup>
+<p>でも実際に可視化するのはめんどい.
+<a href="https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-otlp/examples/basic-otlp-http/src/main.rs">このへん</a>
+を参考にして <code>OpenTelemetryTracingBridge</code> を使いつつ OTLP で吐くのが良い気がするのだけど,
+業務 Rust HTTP サーバーのことはなんもわからん...</p>
+</div>
+<div class="footnote-definition" id="8"><sup class="footnote-definition-label">8</sup>
+<p>「思想又は感情を創作的に表現したものであって、文芸、学術、美術又は音楽の範囲に属するもの」に該当するとは思えない.
+礼を尽したいのであれば author に一声かければよい. 皆快諾してくれるでしょう.</p>
+</div>
+<div class="footnote-definition" id="9"><sup class="footnote-definition-label">9</sup>
+<p>僕はめんどくさかったので調べて書きましたが...</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

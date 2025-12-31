@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+2025年まとめ | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="2025年まとめ" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-12-31-2025-summary&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">2025年まとめ</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-12-31" class="post-date" itemprop="datePublished">
+                2025-12-31
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 poem</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <h2 id="2025nian-nobao-fu-datutamono">2025年の抱負だったもの</h2>
+<p><a href="../2024-12-31-2024-summary">去年のやつ</a></p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+仕事でより良い成果を出す</li>
+<li><input disabled="" type="checkbox"/>
+sabiniwm を会社のマシンで動かせるようにしてこれで仕事をできるようにする.</li>
+<li><input disabled="" type="checkbox"/>
+自作テキストエディタで作業できるくらいにする.</li>
+<li><input disabled="" type="checkbox"/>
+ISUCON に投資する. 実績を残す.</li>
+<li><input disabled="" type="checkbox"/>
+ブログ書く頻度を上げる.</li>
+</ul>
+<p>というのを挙げていたらしい.</p>
+<h3 id="shi-shi">仕事</h3>
+<p>実装はそこそこした気がするが, 色々消化不良な感じがする.
+何が足りないかと聞かれると困ってしまう. 能力も頑張りも運も複合的に足りていないが,
+それらを上げれば解決するかというとそうでもない感. まぁ地道にやっていく.</p>
+<h3 id="sabiniwm">sabiniwm</h3>
+<p><a href="https://github.com/kenoss/sabiniwm">https://github.com/kenoss/sabiniwm</a> 自作の Wayland compositor (Rust).</p>
+<p>2024年末には config を実装したあたりで終わっていた.
+(Rust.Tokyo 2024 の準備の方に時間を取っていて, 当時は本当にタイル型 WM として最低限って感じだったらしい.)
+今年はかなり実装が進んだ.
+(226 commits, 10k lines diff. しかしそんなもんか...)</p>
+<ul>
+<li>secure lock (screen lock)</li>
+<li>最新の smithay に追従</li>
+<li>floating window</li>
+<li>manage hook (xmonad の manage hook 相当)</li>
+<li>screenshot/screencast, およびそれに伴う諸々</li>
+<li>tracing と Perfetto [<a href="../2025-12-13-advanced-tracing-config">記事</a>]</li>
+<li>IME サポート</li>
+</ul>
+<p>screenshot/screencast が一番大変だった. GW あたりから調査と設計を始めたが, 実装が落ち着いたのが10月中旬.
+まぁそのうち半分はナイトレインをやっていたのだけれど, にしても時間がかかりすぎである.
+この話は別記事に書こうと思っている. (そればっかりやな...)</p>
+<p>screenshot/screencast サポートがなされたので alpha goal (私物マシンで 80% 満足) を達成した.
+というわけで v0.1.0 をリリースしてもええかなと思っているのだが, 他の作業に手をつけてしまって戻れなくなってしまった.
+2026年早めにリリースできるといいね.</p>
+<p>beta goal (会社マシンで 80% 満足) は xrandr 相当のサポートと notification が必要で,
+それぞれそこそこ時間をかける必要がありそうで棚に上げている.
+テキストエディタの方を一段落させて2026年末あたりから動けるといいね...</p>
+<p>安定は5億年先です.</p>
+<p><code>yaks.pop();</code></p>
+<h3 id="asahi-linux">Asahi Linux</h3>
+<p>Wayland compositor と言えば, そういや Asahi Linux がたくさん壊れた年でもある.
+今出ている症状は, 「バッテリー切れで <code>shutdown</code> を経由せずに終了後,
+TTY では起動できるが (sway 以外の) Wayland compositor が起動に失敗する. 確定解消法なし」である.
+多分 Asahi Linux の DRM ドライバのバグを踏んでいる気がするのだが, 何とも言えない.
+そこそこつらいのでバッテリー切れしないように注意している...</p>
+<h3 id="tekisutoedeita">テキストエディタ</h3>
+<p>sabiniwm が一段落したので, 自作テキストエディタを再開した.
+最後に触ったのが 2023-12-25, 再開したのが 2025-11-11. 正気???</p>
+<p>あまりにも何もわからなかったのでほぼ全て爆破し, 1から作り直している. 基礎設計から全て変えた.</p>
+<p>そのおかげか, 2ヶ月弱しか触っていないのに以前詰っていた部分まで実装が完了し <sup class="footnote-reference"><a href="#1">1</a></sup>, 速度的にも良好になった.
+(sabiniwm のおかげで効率が上がっているというのもある. 狙っていた効果がちゃんと出ていて嬉しい.)
+やはりメッセージパッシング. メッセージパッシングは多くを解決する.</p>
+<p>2026年はエディタを頑張って, 実用レベルまで持って行きたい.</p>
+<p>これをやるにあたって Rust のちょっと捻ったテクニックとかネタをいくつか持っているのだけれど,
+コードを公開できていないので記事にも書けないという状況で置いている. 早く dump して楽になりたい.</p>
+<h3 id="isucon">ISUCON</h3>
+<p>今年は ISUCON なかった...
+いやあったらあったでリソース取られてしまうし, 準備もあまりできていないのでアレなのですが...</p>
+<p>そういや今年は Rust.Tokyo もなかったな... (´・ω・`)</p>
+<h3 id="blog">blog</h3>
+<p>8記事. やる気あるんか?</p>
+<p>2024年が5記事なので増えてはいる. でも頭の中とスマホと PC に下書きはたくさんあるんですよね. もっと頑張れ.</p>
+<p>Twitter で何かが話題になったり, 仕事で特定のネタが上ったりしたタイミングで
+「あ〜こういう記事/自分のポジションを書いとかないと毎回頭のリソースを消費するんだよなぁ」
+というのを無限に繰り返している. なので書きたいという気持ちは本当.
+でも「記事の続きを書く」と「コードの続きを書く」で常に後者を選んでしまう. 悩ましい.</p>
+<h3 id="du-shu-hui">読書会</h3>
+<p>MPU 本を読み終えた. ちょうど1年くらい.</p>
+<p>次はリンカ本の予定.</p>
+<h3 id="gemu">ゲーム</h3>
+<p>ELDEN RING NIGHTREIGN という人生をぶち壊すゲームをやっている. (やっていた?)</p>
+<p>深度5カンストはしたものの, まぁ雑魚である. DLC 後はあんまりできていない. (エディタが面白いので.)</p>
+<h3 id="ren-sheng">人生</h3>
+<p>人生の進捗は今年もありません. わりと困っている...</p>
+<h3 id="2026nian-nobao-fu">2026年の抱負</h3>
+<p>というわけで2025年の抱負はひとつも達成できませんでした. (形式的には.)</p>
+<p>2026年は</p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+デバッグ力を上げる</li>
+<li><input disabled="" type="checkbox"/>
+英語</li>
+<li><input disabled="" type="checkbox"/>
+sabiniwm v0.1.0 リリース</li>
+<li><input disabled="" type="checkbox"/>
+自作テキストエディタで作業できるくらいにする</li>
+<li><input disabled="" type="checkbox"/>
+ブログ書く頻度を上げる</li>
+<li><input disabled="" type="checkbox"/>
+人生の進捗を出す</li>
+</ul>
+<p>あたりを頑張りたい.</p>
+<p>ほなまた来年 (´・ω・`)ﾉｼ</p>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>これはちょっと誇大で, バッファ周りと vim 周りは前回の版で先が見えていたので,
+このへんをまるっとサボって他の見えていなかった部分を探索しているのでそっちの進捗が出ている, という感じ.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>
