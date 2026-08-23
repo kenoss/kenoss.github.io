@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+黒い画面のデバッグ: Claude Code が自作 Wayland compositor を直すまで | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="黒い画面のデバッグ: Claude Code が自作 Wayland compositor を直すまで" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2026-08-24-debugging-a-black-screen&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">黒い画面のデバッグ: Claude Code が自作 Wayland compositor を直すまで</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2026-08-24" class="post-date" itemprop="datePublished">
+                2026-08-24
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 sabiniwm</span>
+                
+                    <span class="post-tag">🦀 wayland-compositor</span>
+                
+                    <span class="post-tag">🦀 Asahi Linux</span>
+                
+                    <span class="post-tag">🦀 AI</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <h2 id="qian-shu-ki">前書き</h2>
+<p>人間です. Claude Code (Opus 5) に自作 Wayland compositor のバグを修正してもらいました.
+自分ではわからず放置していたので嬉しい. 修正までに至る試行錯誤が良かったので本人に解説してもらいます <sup class="footnote-reference"><a href="#1">1</a></sup> <sup class="footnote-reference"><a href="#2">2</a></sup>.</p>
+<h2 id="hei-ihua-mian-nihahe-moshu-kareteinai">黒い画面には何も書かれていない</h2>
+<p>Claude Code です. 以下は今回の調査の記録で, ほぼそのまま時系列に沿っています.
+先に結論を書いてしまうと, 原因は独立した二つのバグで, どちらも
+「smithay の <code>anvil</code> が前提にしている挙動が Apple silicon で成立しない」という同じ形をしていました.
+そして調査の大半は, バグそのものではなく <strong>失敗が一切観測できない</strong> という状況と戦うことに費やされました.</p>
+<h3 id="zheng-zhuang">症状</h3>
+<ul>
+<li>M2 MacBook Air, Asahi Linux (Fedora Asahi Remix). TTY から直接 compositor を起動する運用.</li>
+<li>sabiniwm を起動すると画面が黒くなり, 以降 TTY にも戻ってこない.</li>
+<li>sway は正常に動く.</li>
+<li>niri など他の smithay ベースの compositor も同様に動かない.</li>
+<li>去年の11月から再現し続けている. きっかけはバッテリー切れだったらしい <sup class="footnote-reference"><a href="#3">3</a></sup>.</li>
+</ul>
+<p>「sway は動く」「smithay ベースは全滅」という切り分けが最初から与えられていたのは大きくて,
+これは最後まで一貫して正しい道標でした.</p>
+<p>なお私に許されていたのはリポジトリとログを読むことだけで <sup class="footnote-reference"><a href="#4">4</a></sup>, compositor を実際に起動して試すのは
+人間の担当です. そして一回試すたびに黒画面になり, 電源長押しで再起動する必要がある.
+<strong>1回の実験が1回の再起動と等価</strong>という制約が, このあとの進め方をほぼ決めました.</p>
+<h3 id="mazuhuan-jing-wodu-mu">まず環境を読む</h3>
+<p><code>/dev/dri</code> を見たところで話が決まりました.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ for d in card0 card1; do echo &quot;$d -&gt; $(basename $(readlink -f /sys/class/drm/$d/device/driver))&quot;; done
+</span><span>card0 -&gt; apple-drm
+</span><span>card1 -&gt; asahi
+</span><span>
+</span><span>$ ls /sys/dev/char/226:0/device/drm   # card0
+</span><span>card0  controlD64                     # ← renderD* が無い
+</span><span>
+</span><span>$ ls /sys/dev/char/226:1/device/drm   # card1
+</span><span>card1  renderD128
+</span></code></pre>
+<ul>
+<li><code>card0</code> = <code>apple-drm</code>. ディスプレイサブシステム. KMS を持ち <code>eDP-1</code> が生えているが, <strong>render node が無い</strong>.</li>
+<li><code>card1</code> = <code>asahi</code>. GPU. render node (<code>renderD128</code>) を持つが, <strong>KMS を持たない</strong> (connector が0個).</li>
+</ul>
+<p>いわゆる split display/render 構成です. スキャンアウトする device と, 描画する device が別物.</p>
+<p>そしてもう一つ. 手元にあった約1年前のメモでは, この番号が <code>card1</code> = GPU, <code>card2</code> = display でした.
+今は <code>card0</code> = display, <code>card1</code> = GPU. <strong>入れ替わっている.</strong>
+<code>simpledrm</code> が minor 0 を解放するタイミングと <code>apple-drm</code> の登録が競合するためで,
+journal に残っていた20回分の boot では現在の並びで固定されていました.
+「一時的に起動できないことがあったが, やがて恒久化した」という症状の変化と一致します.</p>
+<h3 id="yi-tumu-nobagu-fan-hao-shun-de-gpu-woxuan-ndeita">一つ目のバグ: 番号順で GPU を選んでいた <sup class="footnote-reference"><a href="#5">5</a></sup></h3>
+<p>sabiniwm も, <code>anvil</code> も niri も, render node をこう決めています.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>smithay::backend::udev::primary_gpu(session.</span><span style="color:#96b5b4;">seat</span><span>())?
+</span></code></pre>
+<p>その中身 (<code>smithay/src/backend/udev.rs</code>, sabiniwm が pin していた <code>8886e3b</code> 時点) は,</p>
+<ol>
+<li>PCI の親を辿って <code>boot_vga=1</code> の device を探す</li>
+<li>見つからなければ <code>all_gpus()</code>, すなわち <strong><code>/dev/dri/card*</code> をパス名でソートして先頭</strong></li>
+</ol>
+<p>Apple silicon の GPU は platform device なので PCI の親が無く, 1 は必ず外れます.
+よって常に 2 が効く. 以前は <code>card1</code> (GPU) が先頭だったので偶然正しく動いていて,
+今は <code>card0</code> (display 専用) が先頭になった. sabiniwm はここから render node を逆引きしようとして,</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>device_node
+</span><span>    .</span><span style="color:#96b5b4;">node_with_type</span><span>(NodeType::Render)
+</span><span>    .</span><span style="color:#96b5b4;">ok_or_else</span><span>(|| eyre::eyre!(&quot;</span><span style="color:#a3be8c;">no corresponding render node for: path = {}</span><span>&quot;, ...))?
+</span></code></pre>
+<p><code>None</code> を掴んで起動時にエラー終了する, というのが一つ目です.</p>
+<h4 id="wlroots-hatui-ce-sinai">wlroots は推測しない</h4>
+<p>では sway はなぜ平気なのか. wlroots は候補を <strong>KMS の有無で絞ります</strong>
+(<code>backend/session/session.c</code>).</p>
+<pre data-lang="c" style="background-color:#2b303b;color:#c0c5ce;" class="language-c "><code class="language-c" data-lang="c"><span style="color:#b48ead;">static struct</span><span> wlr_device *</span><span style="color:#8fa1b3;">open_if_kms</span><span>(</span><span style="color:#b48ead;">struct</span><span> wlr_session *</span><span style="color:#b48ead;">restrict </span><span style="color:#bf616a;">session</span><span>,
+</span><span>		</span><span style="color:#b48ead;">const char </span><span>*</span><span style="color:#b48ead;">restrict </span><span style="color:#bf616a;">path</span><span>) {
+</span><span>	...
+</span><span>	</span><span style="color:#b48ead;">if </span><span>(!</span><span style="color:#bf616a;">drmIsKMS</span><span>(dev-&gt;fd)) {
+</span><span>		</span><span style="color:#bf616a;">wlr_log</span><span>(WLR_DEBUG, &quot;</span><span style="color:#a3be8c;">Ignoring &#39;</span><span style="color:#d08770;">%s</span><span style="color:#a3be8c;">&#39;: not a KMS device</span><span>&quot;, path);
+</span><span>		</span><span style="color:#bf616a;">wlr_session_close_file</span><span>(session, dev);
+</span><span>		</span><span style="color:#b48ead;">return </span><span style="color:#d08770;">NULL</span><span>;
+</span><span>	}
+</span><span>	</span><span style="color:#b48ead;">return</span><span> dev;
+</span><span>}
+</span></code></pre>
+<p>そして render node は名前から推測せず, EGL に聞く. しかも split 構成の分岐を明示的に持っています
+(<code>render/egl.c</code>).</p>
+<pre data-lang="c" style="background-color:#2b303b;color:#c0c5ce;" class="language-c "><code class="language-c" data-lang="c"><span>	</span><span style="background-color:#bf616a;color:#2b303b;">}</span><span> </span><span style="color:#b48ead;">else if </span><span>(!(match-&gt;available_nodes &amp; (</span><span style="color:#d08770;">1 </span><span>&lt;&lt; DRM_NODE_RENDER))) {
+</span><span>		</span><span style="color:#65737e;">// Likely a split display/render setup. Pick the primary node and hope
+</span><span>		</span><span style="color:#65737e;">// Mesa will open the right render node under-the-hood.
+</span></code></pre>
+<p>実際, 動いている sway のプロセスは <code>/dev/dri/renderD128</code> を開いていて,
+その fd が子プロセス全部に継承されていました. <code>card0</code> で KMS, <code>renderD128</code> で描画,
+という正しい組み合わせで動いている.</p>
+<p>そして重要なことに, sabiniwm 側も <code>device_added()</code> の中では既に EGL 経由で render node を引いていました.
+使っていなかっただけです. なので修正は「起動時に推測するのをやめ, <code>device_added()</code> が
+<code>EGLDevice::try_get_render_node()</code> で得た値を採用する」だけで済みました
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/16c8a65f43b5771b59054e927e84359d6f49501d">16c8a65f</a>).
+KMS を持たない <code>card1</code> は <code>DrmDevice::new()</code> が <code>EOPNOTSUPP</code> で落ちるので自動的に除外されます.</p>
+<h3 id="kokodeyi-du-jian-wei-emasu">ここで一度間違えます</h3>
+<p>私はこの時点で「原因はこれ一つ」と判断し, さらに
+「起動コマンドには既に <code>SABINIWM_DRM_DEVICE_NODE=/dev/dri/renderD128</code> が付いているので,
+今の Mesa なら現状のコードでも通るはずだ」と予測しました.</p>
+<p>外れでした. 直しても黒画面のままです.</p>
+<p>言い訳をすると, この予測にはそれなりの根拠がありました. EGL は健全 (<code>Apple M2 (G14G B0)</code>, Mesa 25.2.0),
+GBM のバッファ確保も3つの node すべてで成功, コードを追う限り環境変数指定の経路に落ちる箇所は無い.
+実際, その読み自体は正しかったのです. 単に<strong>バグがもう一つあった</strong>だけで.</p>
+<p>ここで方針を変えました. 推測でコードを読み続けるのをやめて, <strong>観測できるようにする</strong>方を先にやる.</p>
+<h3 id="jian-enaitoiuwen-ti">見えないという問題</h3>
+<p>そもそもなぜ何も分からなかったのか. <code>LibSeatSession</code> を作った瞬間に VT は <code>KD_GRAPHICS</code> になります.
+以降 stderr に何を書いても画面には出ない. VT 切り替えも効かない. 電源長押しで再起動するしかない.</p>
+<p>そして sabiniwm は udev backend のとき, ちゃんとログをファイルに書いていました. <code>/tmp/sabiniwm.log</code> に.</p>
+<p><code>/tmp</code> は tmpfs です. <strong>黒画面 → 電源断 → 復帰したときにはログが消えている.</strong>
+ログが取れていなかった理由がこれでした.</p>
+<p>そんなわけで, バグを追う前に以下を入れました.</p>
+<ul>
+<li>ログの出力先を <code>$XDG_STATE_HOME/sabiniwm/sabiniwm.log</code> に移す. 再起動を跨いで残るように
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/51098e35e61f16428aaa191f4b6c75b6b823cadd">51098e35</a>).</li>
+<li><code>run()</code> を抜けるエラーを <code>error!</code> でログにも流す. 今までは stderr = 見えない黒画面行きだった
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/88ecd09fd49a4fc142db76df15fee171bf08189d">88ecd09f</a>).</li>
+<li>初期化が既定20秒で終わらなければ console を text mode に戻して <code>exit(1)</code> する watchdog.
+<code>/dev/tty</code> に <code>VT_SETMODE(VT_AUTO)</code> と <code>KDSETMODE(KD_TEXT)</code> を投げるだけ
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/007a85d749b6491234a2fc937ab5c94b0b4109ef">007a85d7</a>).</li>
+<li>output が0個のまま <code>init()</code> が成功しないようにする.
+connector のセットアップ失敗は <code>error!</code> で握り潰されるので, 「動いているのに真っ黒」が容易に作れてしまう
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/8dc14fab0868e3e57e3063c2eb6ade53d185984b">8dc14fab</a>).</li>
+</ul>
+<p>さらに, VT を奪わずに device 選択・EGL・renderer 構築までを実行する <code>probe_drm</code> という example を足しました
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/30ed7a7dbed84aa3a1d92be2fa1f09b7f2c3cd1c">30ed7a7d</a>).
+modeset だけが DRM master を必要とするので, その手前までは sway の中から実行できます.
+これで<strong>再起動を消費せずに検証できる範囲</strong>が一気に広がりました.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>$ cargo run -p sabiniwm --example probe_drm
+</span><span>  all_gpus()               = [&quot;/dev/dri/card0&quot;, &quot;/dev/dri/card1&quot;]
+</span><span>  primary_gpu()            = Some(&quot;/dev/dri/card0&quot;)     ← 一つ目のバグ
+</span><span>
+</span><span>== /dev/dri/card0
+</span><span>  driver (sysfs)           = Some(&quot;apple-drm&quot;)
+</span><span>  node_with_type(Render)   = None                       ← 旧コードはここで詰む
+</span><span>  EGL render_device_path   = Ok(&quot;/dev/dri/renderD128&quot;)
+</span><span>  try_get_render_node()    = Some(DrmNode { dev: 57984, ty: Render })   ← EGL 経由なら引ける
+</span></code></pre>
+<h3 id="heartbeat">heartbeat</h3>
+<p>それでも次の一手が決まりませんでした. ログにはこう出ていたのです.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>23:01:03.679 WARN Error during rendering:
+</span><span>  TemporaryFailure(Access(AccessError { errmsg: &quot;Page flip commit failed&quot;,
+</span><span>    dev: Some(&quot;/dev/dri/card0&quot;), source: Os { code: 16, kind: ResourceBusy } }))
+</span></code></pre>
+<p>そしてこの1行のあと, 58秒間まったくログがありません.</p>
+<p>リトライは走るはずのコードなので, 成功したのか, 無言でスピンしているのか,
+イベントループごと止まったのかが区別できない. ここで私は smithay の内部状態機械について
+何通りも仮説を立てましたが, 今思えば全部無駄でした. 分からないものは測るべきです.</p>
+<p>というわけで, レンダーループのカウンタを数えて定期的に1行吐くようにしました
+(commit <a href="https://github.com/kenoss/sabiniwm/commit/19ac6117578fca15ca79d6614d1f274cb70fa9aa">19ac6117</a>).</p>
+<ul>
+<li><code>rendered</code>: 描いたフレーム数 (damage が無ければ数えない)</li>
+<li><code>queued</code>: KMS に渡した数</li>
+<li><code>failed</code>: KMS に蹴られた数</li>
+<li><code>vblanks</code>: 受け取った vblank の数, すなわち <strong>実際に画面に出た</strong>数</li>
+</ul>
+<p>この4つが並んでいれば, 「ハングしている」「描いているが KMS に届いていない」
+「KMS は受けたがスキャンアウトされていない」を一発で区別できます.</p>
+<p>次の起動でこう出ました.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>23:01:08.675 INFO heartbeat rendered=1  queued=0 failed=1  vblanks=0
+</span><span>23:01:13.675 INFO heartbeat rendered=0  queued=0 failed=0  vblanks=0
+</span><span>   ...
+</span><span>23:01:35.98  INFO InputEvent::DeviceAdded: &quot;Apple MTP keyboard&quot;
+</span><span>23:01:36.99  INFO run_manage_hook, app_id = Some(&quot;Alacritty&quot;), title = &quot;on_workspace_3&quot;
+</span><span>23:01:37.96  INFO run_manage_hook, app_id = Some(&quot;emacs&quot;)
+</span><span>23:01:38.678 INFO heartbeat rendered=13 queued=0 failed=13 vblanks=0
+</span></code></pre>
+<p>決定的でした. <code>queued=0</code>, <code>vblanks=0</code>. <strong>一度もフレームが KMS に渡っていない.</strong>
+一方でキーバインドは効いていて, alacritty 3枚と emacs がちゃんと起動して manage hook まで走っている.
+compositor は完全に正常で, page flip だけが100%失敗していたのです.
+「黒画面だがキー入力は受け付ける」の正体がこれでした.</p>
+<p>ちなみに入力デバイスの追加が58秒後になっているのは, libinput がキューした <code>DEVICE_ADDED</code> を
+fd が readable になるまで吐かないからで, つまりあの時刻が「人間が初めてキーを触った瞬間」です.
+イベントループはずっと生きていました.</p>
+<h3 id="er-tumu-nobagu-dcp-nodian-yuan-woluo-tositeita">二つ目のバグ: DCP の電源を落としていた</h3>
+<p><code>EBUSY</code> は, 同じ CRTC の前のコミットが完了していないうちに nonblock なコミットが来たときに
+カーネルが返すものです (<code>drm_atomic_helper_setup_commit()</code>). つまり CRTC が永久に busy のまま.</p>
+<p>ここで sway とカーネルログを比較しました.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>### sway
+</span><span>dcp_poweron() starting                       ← boot 時の1回だけ
+</span><span>set_digital_out_mode ... &quot;2560x1600&quot;
+</span><span>
+</span><span>### sabiniwm
+</span><span>dcp_poweroff() done                          ← ★これ
+</span><span>dcp_poweron() starting
+</span><span>set_digital_out_mode ... &quot;2560x1600&quot;
+</span></code></pre>
+<p><strong>sway は DCP を一度も電源断していません.</strong> sabiniwm だけが poweroff → poweron している.</p>
+<p>出どころは <code>device_added()</code> の一行でした.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>DrmDevice::new(fd.</span><span style="color:#96b5b4;">clone</span><span>(), </span><span style="color:#d08770;">true</span><span>)
+</span><span style="color:#65737e;">//                         ^^^^ disable_connectors
+</span></code></pre>
+<p><code>anvil</code> 由来で, 「前の compositor が変な状態を残していても大丈夫なように,
+全 connector と全 plane を無効化して既知の状態にする」というものです.
+ところが Apple の DCP はこれに耐えられない. 全 connector を切ると DCP が電源断し,
+<strong>その後のモードセットは成功して画面モードも設定されるのに, CRTC が二度と page flip を完了しなくなる.</strong>
+以降すべてのコミットが <code>EBUSY</code>.</p>
+<p>wlroots はデバイスをリセットしません. モードセットは <code>ALLOW_MODESET</code> のブロッキング,
+page flip だけ <code>NONBLOCK</code>, それだけです. ここでも「余計なことをしない」方が勝っていました.</p>
+<p><code>disable_connectors</code> を <code>false</code> にして, 次の起動:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>heartbeat rendered=37 queued=37 failed=0 vblanks=37
+</span><span>heartbeat rendered=26 queued=26 failed=0 vblanks=26
+</span><span>heartbeat rendered=54 queued=54 failed=0 vblanks=54
+</span></code></pre>
+<p><code>rendered == queued == vblanks</code>, <code>failed=0</code>, page flip の失敗は0件. 直りました <sup class="footnote-reference"><a href="#6">6</a></sup>.</p>
+<p>なお同じ <code>reset_state()</code> は <code>DrmError::TestFailed</code> の復旧経路にも残っていて,
+そちらを踏むとセッション中に同じ黒画面に落ちます. 併せて塞ぎました (commit <a href="https://github.com/kenoss/sabiniwm/commit/c54002dae473d919fb6dd4f3df2638ba937ee147">c54002da</a>).</p>
+<h3 id="omake-syncobj">おまけ: syncobj</h3>
+<p>ついでに一つ見つけたものを. <code>linux-drm-syncobj-v1</code> (explicit sync) が有効化されていませんでした.
+smithay は「render node に対応する primary node」を開いている device の中から探すのですが,
+split 構成ではそれは <code>card1</code> で, KMS を持たないので開いていない. よって永久に空振りします.</p>
+<p>実測するとこうでした.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>/dev/dri/card0       SYNCOBJ=no  TIMELINE=no  EVENTFD=n/a (Operation not supported)
+</span><span>/dev/dri/card1       SYNCOBJ=yes TIMELINE=yes EVENTFD=yes
+</span><span>/dev/dri/renderD128  SYNCOBJ=yes TIMELINE=yes EVENTFD=yes
+</span></code></pre>
+<p><code>linux-drm-syncobj-v1</code> はクライアントが<strong>描画に使う GPU 上</strong>で作るタイムラインを import するプロトコルなので,
+見るべきは <code>renderD128</code> の方でした. render node は非特権で開かれる前提のものなので, 直接開けば済みます.</p>
+<p>無いと困るかというと, クライアントは implicit sync にフォールバックするだけで, Mesa 上では正しく動きます.
+本当に必須なのは implicit sync を持たない NVIDIA プロプライエタリドライバなので, ここでは該当しません.
+とはいえ直せるものは直しました (commit <a href="https://github.com/kenoss/sabiniwm/commit/e0ae8e2e29e1bffa941af5f9cdac387a4d09107d">e0ae8e2e</a>).</p>
+<h3 id="upstream-dehadounatuteiruka">upstream ではどうなっているか <sup class="footnote-reference"><a href="#7">7</a></sup></h3>
+<p>今回直した二つは, どちらも <code>anvil</code> から受け継いだコードです. 本家はどうなっているのか.
+smithay <code>master</code> (<code>92ba0e92</code>, 2026-08-12) と niri <code>main</code> (<code>dd75865f</code>, 2026-08-21) を読みました.</p>
+<p><strong>一つ目は smithay で既に直っていました.</strong>
+<a href="https://github.com/Smithay/smithay/commit/e9f007263a1d19ef705f56facf468058c71c8567"><code>e9f00726</code></a> と
+<a href="https://github.com/Smithay/smithay/commit/6329f5b21693c53b0370cc7f62523ea4d0a42073"><code>6329f5b2</code></a>
+(どちらも 2025-12-18) で <code>primary_gpu()</code> の優先順位が変わっています.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#65737e;">// 1st priority: GPU with boot_vga=1
+</span><span style="color:#65737e;">// 2nd priority: GPU with a render node          ← 追加された
+</span><span style="color:#65737e;">// 3rd priority: first GPU in alphabetical order
+</span></code></pre>
+<p>この2番目のおかげで, このマシンでは render node を持たない <code>card0</code> が飛ばされて <code>card1</code> が返ります.
+つまり sabiniwm が pin していた <code>8886e3b</code> (2025-03-18) が古かっただけで, 私が「wlroots はこうしている」
+と言って書いた修正は, 本家では別の形で先に入っていたわけです. 私の方が KMS の有無で絞るぶん wlroots 寄りですが,
+このハードウェアではどちらでも結果は同じになります.</p>
+<p><strong>二つ目は <code>anvil</code> に残っています.</strong> <code>anvil/src/udev.rs</code>:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let </span><span>(drm, notifier) = DrmDevice::new(fd.</span><span style="color:#96b5b4;">clone</span><span>(), </span><span style="color:#d08770;">true</span><span>).</span><span style="color:#96b5b4;">map_err</span><span>(DeviceAddError::DrmDevice)?;
+</span></code></pre>
+<p>syncobj の device 選択も同じく残っています. <code>primary_gpu</code> の primary node を <code>backends</code> から引く,
+というあの形のままです.</p>
+<p><strong>niri は両方とも踏みません.</strong></p>
+<ul>
+<li>一つ目: pin している smithay (<code>4cf0b620</code>, 2026-08-12) が上の修正を含んでいる.</li>
+<li>二つ目:
+<a href="https://github.com/YaLTeR/niri/commit/63f58086b9783fd80839ef35df82b05682c1c495"><code>63f58086</code></a>
+(2025-11-19) <em>"tty: Avoid modeset on adding device if possible"</em> で
+<code>DrmDevice::new(device_fd.clone(), false)</code> になっている.
+動機は DCP ではなく「device 追加時に不要な modeset をしない」ですが, 触っている場所は同じです.</li>
+<li>syncobj: niri は <code>linux-drm-syncobj-v1</code> を実装していないので, そもそも該当しません.</li>
+</ul>
+<p>面白いのは二つ目で, niri は今回の障害が出はじめたのとほぼ同時期に, まったく別の動機で同じ一行を倒しています.
+「余計なことをしない」に寄せると, 理由が何であれ同じ地雷を踏まなくなる.</p>
+<h3 id="xue-ndakoto">学んだこと</h3>
+<p><strong>推測をやめて計測する.</strong> 当たり前ですが, 私は今回それを一度サボって外しました.
+特に「1回の実験が1回の再起動」という環境では, 一手を無駄にする代償が大きい.
+コードを読んで仮説を立てる時間より, ログを1行足す時間の方が安いなら, 足すべきです.</p>
+<p><strong>失敗が見えるようにするのは, バグを直すのと同じくらいの仕事.</strong>
+ログが tmpfs に書かれていて再起動で消えていた, というのが数ヶ月分の情報を失わせていました.
+VT を奪う前に何を記録するか, 失敗したときに console をどう返すか,
+という設計は compositor では「あると便利」ではなく必須の機能です.</p>
+<p><strong>「動いている実装」との差分を取る.</strong> sway が動いていたことが最大の手がかりでした.
+wlroots のソースが手元にあるおかげで, 「wlroots は KMS で絞る」「wlroots はリセットしない」
+という二つの差分が両方とも当たりだった. どちらも wlroots 側は
+「推測しない」「余計なことをしない」という同じ方針で, <code>anvil</code> 側が親切心で余分なことをしていた形です <sup class="footnote-reference"><a href="#8">8</a></sup>.</p>
+<p><strong>環境の前提は静かに壊れる.</strong> 二つのバグはどちらも sabiniwm の変更で壊れたものではありません.
+一つ目は, 番号順という推測がたまたま当たっていた状態から, たまたま外れる状態に移っただけ
+(しかも環境変数で回避済みだったので, 今回の障害の引き金ではなかった).
+二つ目に至っては, 同じコードが同じハードウェアで, ある日を境に通らなくなった.
+<code>anvil</code> のコードは何も悪くなっていないのに, ある日突然動かなくなる.</p>
+<h3 id="xiu-zheng-yi-lan">修正一覧</h3>
+<p>最終的に10コミットになりました. 「まず失敗が見えるようにする」→「黙って壊れないようにする」→
+「実際に直す」の順です.</p>
+<ul>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/e0ae8e2e29e1bffa941af5f9cdac387a4d09107d"><code>e0ae8e2e</code></a> fix: Enable explicit sync on a split display/render device</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/c54002dae473d919fb6dd4f3df2638ba937ee147"><code>c54002da</code></a> fix: Don't reset the DRM device to a known state ← 本命2</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/19ac6117578fca15ca79d6614d1f274cb70fa9aa"><code>19ac6117</code></a> feat: Log a heartbeat of the render loop</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/1dbb7164240eb8ec9e2d9570058f787219ac83c2"><code>1dbb7164</code></a> fix: Don't panic when a device has no usable EGL display</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/16c8a65f43b5771b59054e927e84359d6f49501d"><code>16c8a65f</code></a> fix: Don't refuse to start on a split display/render device ← 本命1</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/8dc14fab0868e3e57e3063c2eb6ade53d185984b"><code>8dc14fab</code></a> fix: Fail when the udev backend sets up no output</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/007a85d749b6491234a2fc937ab5c94b0b4109ef"><code>007a85d7</code></a> feat: Restore the console instead of leaving a black screen</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/88ecd09fd49a4fc142db76df15fee171bf08189d"><code>88ecd09f</code></a> fix: Log the error that terminates <code>SabiniwmState::run()</code></li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/51098e35e61f16428aaa191f4b6c75b6b823cadd"><code>51098e35</code></a> fix: Put the udev log file outside of tmpfs</li>
+<li><a href="https://github.com/kenoss/sabiniwm/commit/30ed7a7dbed84aa3a1d92be2fa1f09b7f2c3cd1c"><code>30ed7a7d</code></a> feat: Add <code>probe_drm</code> example to diagnose udev backend setup</li>
+</ul>
+<p>一つ目は上で見たとおり smithay 本体で既に直っています. 二つ目と syncobj は <code>anvil</code> に残っているので,
+そこから派生した compositor が Apple silicon 上で同じことになる可能性はまだあります.</p>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>(人間) というのもあるし, 自分が知らなかったことなので記録しておくという意味でも.</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>(人間) 補足など以外はほぼ AI 出力ママです. 自分とはスタイルが違うけど, まぁ著者が違うしね?
+文責は自分にあります.</p>
+</div>
+<div class="footnote-definition" id="3"><sup class="footnote-definition-label">3</sup>
+<p>(人間) Chat GPT (Coding agent ではなく chat) は強制電源断 (バッテリー切れ) で
+display pipeline / DCP / iGPU firmware が中途半端な状態になったのではと推測していた.
+去年12月時点では「この現象は発現したり収まったりする」と相談しているので, 確定落ちになったのはもっと後.
+Opus 君がこう言っているのは自分が貼った Chat GPT との会話ログにその回が含まれていなかったから. (ごめん.)</p>
+</div>
+<div class="footnote-definition" id="4"><sup class="footnote-definition-label">4</sup>
+<p>(人間) 最初に「permission: このマシンで別の作業を並行してやっているので, 一旦このリポジトリ配下
+(sabiniwm, smithay, sway, wlroots を submodule) と log を読んでわかる範囲で.」と伝えました.</p>
+</div>
+<div class="footnote-definition" id="5"><sup class="footnote-definition-label">5</sup>
+<p>(人間) 実際はこのあたりの事情は Anvil を fork する段階で M2 mac で動作確認したときに把握済みで
+[<a href="https://github.com/kenoss/sabiniwm/commit/09c14c419b886cd54ef3fd5545a147e2f0682329">commit</a>],
+だから <code>SABINIWM_DRM_DEVICE_NODE=/dev/dri/renderD128</code> を付けて起動するという運用になっていたのでした.
+使っていた起動オプションだけ教えて, 探索はそのまま続けてもらいました. 実際修正によって (無限に遅延させていた)
+環境変数を不要にするというのが実現できたのでヨシ!</p>
+</div>
+<div class="footnote-definition" id="6"><sup class="footnote-definition-label">6</sup>
+<p>(人間) AI 君の筆がそっけなさすぎるけど, ここめちゃ盛り上りポイントです.</p>
+</div>
+<div class="footnote-definition" id="7"><sup class="footnote-definition-label">7</sup>
+<p>(人間) niri を読んでもらったのはこの記事の第一稿を書いてもらった後です. niri は GPL なので一応.</p>
+</div>
+<div class="footnote-definition" id="8"><sup class="footnote-definition-label">8</sup>
+<p>(人間) これが余計なことかどうかは今の自分には判断しかねる. こうなった文脈も追ってないし.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

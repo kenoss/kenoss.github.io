@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+crate thin_delegate を書いた (3&#x2F;4) | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="crate thin_delegate を書いた (3&#x2F;4)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-01-04-thin_delegate-3&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">crate thin_delegate を書いた (3&#x2F;4)</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-01-04" class="post-date" itemprop="datePublished">
+                2025-01-04
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 rust</span>
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 thin_delegate</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <ul>
+<li><a href="../2025-01-02-thin_delegate-1">1章: <code>thin_delegate</code> の紹介</a></li>
+<li><a href="../2025-01-03-thin_delegate-2">2章: proc macro 間での情報伝達と delegation crate 比較</a></li>
+<li><a href="../2025-01-04-thin_delegate-3">3章: <code>thin_delegate</code> の設計と実装</a>
+<ul>
+<li><a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/./#proc-macro-crate-should-use-trybuild">proc macro crate は <code>trybuild</code> を使うべきである</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/./#direction-of-thin_delegate">thin_delegate の基本方針</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/./#syntax-of-thin-delegate">thin_delegate の構文</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/./#implementation-of-thin_delegate">thin_delegate の実装</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/./#other-techniques">その他のテクニック</a></li>
+<li><a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/./#summary">3章まとめ</a></li>
+</ul>
+</li>
+<li><a href="../2025-01-05-thin_delegate-4">4章: まとめ</a></li>
+</ul>
+<h2 id="chapter-3">3章: <code>thin_delegate</code> の設計と実装</h2>
+<p>1章では基本的な使い方を見, 2章では実装のひとつのコアである proc macro 間での情報伝達方法を比較しました.
+thin_delegate はそのうち <strong>proc macro 中で decl macro を経由する</strong> 方法を採用しています.
+この章では <strong>thin_delegate の設計および実装</strong> の残りの部分を掘り下げます.
+また <strong>trait method の自動 delegation の構文</strong> についても議論します.</p>
+<h3 id="proc-macro-crate-should-use-trybuild">proc macro crate は <code>trybuild</code> を使うべきである</h3>
+<p>本題に入る前にひとつ言っておきたいことがあります.
+<strong>proc macro crate は <a href="https://github.com/dtolnay/trybuild"><code>trybuild</code></a> を使うべき</strong> です.
+もっと言うと, <strong>正常系以外もちゃんとテストを書くべき</strong> です.</p>
+<p>proc macro は黒魔術を誰でも行使できるようにパッケージ化したものです <sup class="footnote-reference"><a href="#301">1</a></sup>.
+ドキュメントを整備するのは当然ですが, もうひとつ大事なのはエラーです.
+ユーザーにドキュメントを隅から隅まで読むことは期待してはいけません.
+概要を読むくらいは期待したいところですが,
+平均的なユーザーはその後実際に crate を使ってみて, シンプルなケースから始めて自分が本当にやりたい形に近づけていきます.
+その道中の節々でエラーに出くわし, エラーを解決しながら進んでいきます.
+典型的には エラー表示 -&gt; Web 検索 -&gt; ドキュメント -&gt; テスト の順に見て行くと思っておけばよいでしょう.
+エラーメッセージは最初に目にするものであるため, 親切であればあるほど良いです.
+一般に, 可能な場合は <strong>ユーザーに解決を求めるエラーはユーザーのアクション候補を明示するべき</strong> です.</p>
+<p>trybuild を使うことで次のテストができます:</p>
+<ul>
+<li>コンパイルが通るケース. 実行時の挙動もテストできる.</li>
+<li>コンパイルが通らないケース. どの様なエラー表示になるのかをテストできる.
+<ul>
+<li>ユーザーが陥りやすいケースにどの様なエラーメッセージが表示されるか.
+ユーザーはリポジトリを grep したりテストを眺めることでここに辿りつくケースがある.</li>
+<li>サポートされない機能の明示.
+ファイル名を limitation とか unsupported とかで統一しておけばユーザーが把握しやすくなります.
+ドキュメントからリンクを貼ればより良いです.</li>
+</ul>
+</li>
+<li>panic しないこと</li>
+</ul>
+<p>まぁしかし, proc macro 側がいくら頑張ってもエラーメッセージを改善しようがないケースも多々あります.
+そういうときはドキュメントで例示だけして諦めましょう. 逆にこのケースはユーザーが頑張るべきです.
+ドキュメントを読んだり <code>cargo expand</code> しましょう.</p>
+<h3 id="direction-of-thin_delegate">thin_delegate の基本方針</h3>
+<p>proc macro の目的にはいくつかの系統があります. 雑に分類してみましょう.</p>
+<ul>
+<li>trait のデフォルト実装を埋める
+<ul>
+<li>derive macro, e.g. <code>#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]</code></li>
+</ul>
+</li>
+<li>ユーザーが展開系を想像できるものを楽に生成する
+<ul>
+<li><code>#[derive(derive_more::From)]</code> [<a href="https://docs.rs/derive_more/latest/derive_more/derive.From.html">doc</a>]</li>
+<li><code>#[derive(getset::Getters, getset::Setters)]</code> [<a href="https://docs.rs/getset/latest/getset/">doc</a>]</li>
+<li><code>#[derive(derive_builder::Builder)]</code> [<a href="https://docs.rs/derive_builder/latest/derive_builder/">doc</a>]</li>
+<li><code>#[thin_delegate::fill_delegate]</code> [<a href="https://docs.rs/thin_delegate/latest/thin_delegate/attr.fill_delegate.html">doc</a>]</li>
+<li><code>seq!</code> [<a href="https://github.com/dtolnay/proc-macro-workshop?tab=readme-ov-file#function-like-macro-seq">README</a>]</li>
+</ul>
+</li>
+<li>構造体定義の DSL
+<ul>
+<li><code>#[derive(thiserror::Erorr)]</code> [<a href="https://docs.rs/thiserror/latest/thiserror/">doc</a>]</li>
+<li><code>#[bitfield]</code> [<a href="https://github.com/dtolnay/proc-macro-workshop?tab=readme-ov-file#attribute-macro-bitfield">README</a>]</li>
+</ul>
+</li>
+<li>制約を守らせる
+<ul>
+<li><code>#[sorted]</code> [<a href="https://github.com/dtolnay/proc-macro-workshop?tab=readme-ov-file#attribute-macro-sorted">README</a>]</li>
+<li><code>#[remain]</code> [<a href="https://docs.rs/remain/latest/remain/">doc</a>]</li>
+</ul>
+</li>
+<li>下層の仕組みの隠蔽
+<ul>
+<li><code>invently::submit!</code> [<a href="https://github.com/dtolnay/inventory">repo</a>]</li>
+<li><code>#[distributed_slice]</code> [<a href="https://github.com/dtolnay/linkme">repo</a>]</li>
+</ul>
+</li>
+</ul>
+<p>thin_delegate は <strong>ユーザーが展開系を想像できるものを楽に生成する</strong> に属します.
+このケースでは構文も挙動も可能な限りシンプルであるべきと僕は思っています. 何故なら複雑にすると想像が効かなくなる/外れるからです.
+以下ではこれを念頭に置いておきます.</p>
+<h3 id="syntax-of-thin-delegate">thin_delegate の構文</h3>
+<p>さて, 本題に入りましょう. まずは構文を決めておきましょう.</p>
+<p>thin_delegate は enum_delegate, ambassador, delegate (, portrait) から大きな影響を受けています.
+ここでは thin_delegate が何故この構文を採用しているのかを, 他と比較しながら説明していきます.</p>
+<h4 id="attr-macro-on-impl-trait-for"><code>impl Trait for StructEnum {...}</code> に付ける</h4>
+<p>基本的な構文は以下の様なものでした:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>] </span><span style="color:#65737e;">// (1-2)
+</span><span style="color:#b48ead;">trait </span><span>ShapeI {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64</span><span>;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Rect {
+</span><span>    </span><span style="color:#bf616a;">width</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>    </span><span style="color:#bf616a;">height</span><span>: </span><span style="color:#b48ead;">f64</span><span>,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>] </span><span style="color:#65737e;">// (1-3)
+</span><span style="color:#b48ead;">struct </span><span>Window {
+</span><span>    </span><span style="color:#bf616a;">rect</span><span>: Rect,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Rect {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">area</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">f64 </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.width * </span><span style="color:#bf616a;">self</span><span>.height
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>]
+</span><span style="color:#b48ead;">impl </span><span>ShapeI </span><span style="color:#b48ead;">for </span><span>Window {} </span><span style="color:#65737e;">// (1-4)
+</span></code></pre>
+<p>(1-2), (1-3), (1-4) で何が起こるかを想像できますか?</p>
+<ul>
+<li><code>#[thin_delegate::register]</code> は trait/struct/enum の定義を後で使えるように登録する.</li>
+<li><code>#[thin_delegate::fill_delegate]</code> は <code>impl Trait for StructEnum {...}</code> のうち未定義な trait method を埋める.</li>
+</ul>
+<p>基本的にはこれだけです.</p>
+<p>似た様なことを ambassador でやると以下の様になります.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">ambassador</span><span>::</span><span style="color:#bf616a;">delegatable_trait</span><span>]
+</span><span style="color:#b48ead;">trait </span><span>Shout&lt;T&gt;
+</span><span style="color:#65737e;">// これを付けると駄目
+</span><span style="color:#65737e;">// where
+</span><span style="color:#65737e;">//     T: std::fmt::Display,
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">shout</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">input</span><span>: T) -&gt; String;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl</span><span>&lt;T&gt; Shout&lt;T&gt; </span><span style="color:#b48ead;">for </span><span>String
+</span><span style="color:#b48ead;">where
+</span><span>    T: std::fmt::Display,
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">shout</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">input</span><span>: T) -&gt; String {
+</span><span>        format!(&quot;</span><span style="color:#d08770;">{}</span><span style="color:#a3be8c;">, </span><span style="color:#d08770;">{}</span><span>&quot;, </span><span style="color:#bf616a;">self</span><span>, input)
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(ambassador::Delegate)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Shout&lt;T&gt;, generics = &quot;</span><span style="color:#a3be8c;">T</span><span>&quot;, where = &quot;</span><span style="color:#a3be8c;">T: std::fmt::Display</span><span>&quot;)]
+</span><span style="color:#b48ead;">pub struct </span><span>Cat(String);
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(ambassador::Delegate)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Shout&lt;T&gt;, generics = &quot;</span><span style="color:#a3be8c;">T</span><span>&quot;, where = &quot;</span><span style="color:#a3be8c;">T: std::fmt::Display</span><span>&quot;)]
+</span><span style="color:#b48ead;">enum </span><span>Animal {
+</span><span>    Cat(Cat),
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> cat = Cat(&quot;</span><span style="color:#a3be8c;">meow</span><span>&quot;.</span><span style="color:#96b5b4;">to_string</span><span>());
+</span><span>    assert_eq!(cat.</span><span style="color:#96b5b4;">shout</span><span>(&quot;</span><span style="color:#a3be8c;">world</span><span>&quot;), &quot;</span><span style="color:#a3be8c;">meow, world</span><span>&quot;);
+</span><span>    </span><span style="color:#b48ead;">let</span><span> animal = Animal::Cat(cat);
+</span><span>    assert_eq!(animal.</span><span style="color:#96b5b4;">shout</span><span>(&quot;</span><span style="color:#a3be8c;">world</span><span>&quot;), &quot;</span><span style="color:#a3be8c;">meow, world</span><span>&quot;);
+</span><span>}
+</span></code></pre>
+<p>何故 <code>#[derive(ambassador::Delegate)]</code> と <code>[delegate(...)]</code> が分かれているのかや,
+generics/trait bound の指定の仕方など, ぱっとわかりにくいと思います.</p>
+<p>すぐわかる差分は次のみっつです:</p>
+<ol>
+<li><code>#[thin_delegate::fill_delegate]</code> は <code>impl Trait for StructEnum {...}</code> に付ける.
+ambassador の <code>#[delegate(...)]</code> は struct/enum に付ける.</li>
+<li>ambassador では <code>#[derive(ambassador::Delegate)]</code> と <code>[delegate(...)]</code> の両方を記述する必要がある.</li>
+<li>thin_delegate では generics の指定のための追加のオプションはない.
+ambassador は <code>#[delegate(...)]</code> の中で指定する必要がある.</li>
+</ol>
+<p>これらは密接に絡み合っています.</p>
+<p>まず 2. ですが, (1. ambassador のデザインの下では) struct/enum に対して複数の trait を自動 delegate
+させるためには以下の様に書く必要があります:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(ambassador::Delegate)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Shout&lt;T&gt;, generics = &quot;</span><span style="color:#a3be8c;">T</span><span>&quot;, where = &quot;</span><span style="color:#a3be8c;">T: std::fmt::Display</span><span>&quot;)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Walk)]
+</span><span style="color:#b48ead;">enum </span><span>Animal {
+</span><span>    Cat(Cat),
+</span><span>}
+</span></code></pre>
+<p>このため <code>#[derive(ambassador::Delegate)]</code> と <code>[delegate(...)]</code> を分ける必要があります <sup class="footnote-reference"><a href="#302">2</a></sup>.</p>
+<p>そうなのです. この問題を「<code>impl Trait for StructEnum {...}</code> を埋める」問題だと認識しさえすれば,
+この macro は trait <code>Trait</code> と struct/enum <code>StructEnum</code> の組 <code>(Trait, StructEnum)</code>
+に対して記述/動作するのが自然 (1.) だということがわかります. そうすると後のデザインはほぼ一直線です.</p>
+<p><a href="https://doc.rust-lang.org/reference/procedural-macros.html#r-macro.proc.derive.intro">derive macro は struct/enum/union にしか付けられません</a>.
+なので thin_delegate では普通の proc macro で実装しています <sup class="footnote-reference"><a href="#303">3</a></sup>.</p>
+<p>3.の選択も (少なくとも構文的には) そこから従います. <code>impl Trait for StructEnum {...}</code> に付けるのであれば
+この Rust の構文で記述される generics/trait bound の情報を使うのが最も自然でしょう.</p>
+<p>この選択により <code>ambassador::Delegate</code> のオプション
+<a href="https://docs.rs/ambassador/latest/ambassador/derive.Delegate.html#delegate-where--a-debug---where-key"><code>where</code></a>
+<a href="https://docs.rs/ambassador/latest/ambassador/derive.Delegate.html#delegateshoutx-generics--x---trait-generics"><code>generics</code></a>
+<a href="https://docs.rs/ambassador/latest/ambassador/derive.Delegate.html#delegateshout-automatic_where_clause--false---inhibit-automatic-generation-of-where-clause"><code>automatic_where_clause</code></a>
+は不要になります <sup class="footnote-reference"><a href="#304">4</a></sup>. 残りは
+<a href="https://docs.rs/ambassador/latest/ambassador/derive.Delegate.html#delegate-target--foo---target-key"><code>target</code></a>
+だけです.</p>
+<h4 id="non-trivial-delegation">Non trivial delegation</h4>
+<p>ambassador の <code>target</code> は次の様に delegate すべきフィールドが一意に定まらない場合に使います:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(ambassador::Delegate)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Walk, target = &quot;</span><span style="color:#a3be8c;">foo</span><span>&quot;)] </span><span style="color:#65737e;">// &lt;-------- Delegate implementation of Shout to struct field .foo
+</span><span style="color:#b48ead;">pub struct </span><span>MultiFieldStruct {
+</span><span>  </span><span style="color:#bf616a;">foo</span><span>: Cat,
+</span><span>  </span><span style="color:#bf616a;">bar</span><span>: Cat,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(ambassador::Delegate)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Walk, target = &quot;</span><span style="color:#a3be8c;">1</span><span>&quot;)] </span><span style="color:#65737e;">// &lt;-------- Delegate implementation of Shout to second field
+</span><span style="color:#b48ead;">pub struct </span><span>MultiFieldTuppleStruct(Cat, Cat);
+</span></code></pre>
+<p>これをどう扱うか話の前に, もう少し一般化しましょう.</p>
+<p>この記事では組 <code>(Trait, StructEnum, trait_item)</code> で <strong><code>trait_item</code> が trivial に delegation 可能</strong> を以下で定義します:</p>
+<ul>
+<li><code>trait_item</code> が trait function (method) である; and</li>
+<li><code>StructEnum</code> が enum またはひとつの field のみを持つ struct である.</li>
+</ul>
+<p>用語を濫用して単に <strong>trivial である</strong> とも言うことにする.</p>
+<p>さて, thin_delegate は「trivial なものは delegation で自動に, そうでないものは段階的に自由度を上げられるように」しています.
+そのためのふたつの機能が <strong><code>scheme</code></strong> と <strong>手動実装への fallback</strong> です.</p>
+<h4 id="arg-scheme">Argument <code>scheme</code></h4>
+<p>thin_delegate は trivial な場合は delegation によって method を埋めますが, <code>scheme</code> はこのメソッド生成ルールを弄ります.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub struct </span><span>MultiFieldStruct {
+</span><span>  </span><span style="color:#bf616a;">foo</span><span>: Cat,
+</span><span>  </span><span style="color:#bf616a;">bar</span><span>: Cat,
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(scheme = |f| </span><span style="color:#bf616a;">f</span><span>(&amp;self.foo))]
+</span><span style="color:#b48ead;">impl </span><span>Walk </span><span style="color:#b48ead;">for </span><span>MultiFieldStruct {}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub struct </span><span>MultiFieldTuppleStruct(Cat, Cat);
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(scheme = |f| </span><span style="color:#bf616a;">f</span><span>(&amp;self.1))]
+</span><span style="color:#b48ead;">impl </span><span>Walk </span><span style="color:#b48ead;">for </span><span>MultiFieldStruct {}
+</span></code></pre>
+<p>この構文を追加することで複雑な場合もハンドリングできるのが良いですね.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(derive_more::From)]
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub</span><span>(</span><span style="color:#b48ead;">crate</span><span>) </span><span style="color:#b48ead;">enum </span><span>Backend {
+</span><span>    Udev(udev::UdevBackend),
+</span><span>    #[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">winit</span><span>&quot;)]
+</span><span>    Winit(winit::WinitBackend),
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>(
+</span><span>    external_trait_def = crate::external_trait_def::smithay::wayland::buffer,
+</span><span>    scheme = |f| {
+</span><span>        match self {
+</span><span>            Self::</span><span style="color:#bf616a;">Udev</span><span>(backend) =&gt; </span><span style="color:#bf616a;">f</span><span>(backend),
+</span><span>            #[</span><span style="color:#bf616a;">cfg</span><span>(feature = &quot;</span><span style="color:#a3be8c;">winit</span><span>&quot;)]
+</span><span>            Self::</span><span style="color:#bf616a;">Winit</span><span>(backend) =&gt; </span><span style="color:#bf616a;">f</span><span>(backend),
+</span><span>        }
+</span><span>    }
+</span><span>)]
+</span><span style="color:#b48ead;">impl </span><span>smithay::wayland::buffer::BufferHandler </span><span style="color:#b48ead;">for </span><span>Backend {}
+</span></code></pre>
+<p>これは <code>delegate</code> crate の構文をどうやって cryptic でない形で組み込むかを考えた結果です.</p>
+<h4 id="fallback-to-manual-associated-items">手動実装への fallback</h4>
+<p>自動 delegation でも <code>scheme</code> でも associated const/type を扱うことはできません <sup class="footnote-reference"><a href="#305">5</a></sup>.
+<strong>1. 手動の実装が提供されている場合, それについては自動生成をしない, 2. trivial でない場合は自動生成をしない</strong>
+とすることでこのケースをユーザーに委ねることができます:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">trait </span><span>Hello {
+</span><span>    </span><span style="color:#b48ead;">type </span><span>Return;
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#d08770;">HAS_DEFAULT</span><span>: &amp;</span><span style="color:#b48ead;">&#39;static str </span><span>= &quot;</span><span style="color:#a3be8c;">HAS_DEFAULT</span><span>&quot;;
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#d08770;">NEED_TO_FILL</span><span>: &amp;</span><span style="color:#b48ead;">&#39;static str</span><span>;
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// `thin_delegate` only can fill associated functions.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">filled</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">Self::</span><span>Return;
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">override_</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">Self::</span><span>Return;
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>Hello </span><span style="color:#b48ead;">for </span><span>String {
+</span><span>    </span><span style="color:#b48ead;">type </span><span>Return = String;
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#d08770;">NEED_TO_FILL</span><span>: &amp;</span><span style="color:#b48ead;">&#39;static str </span><span>= &quot;</span><span style="color:#a3be8c;">String</span><span>&quot;;
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">filled</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">Self::</span><span>Return {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">clone</span><span>()
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">override_</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">Self::</span><span>Return {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">clone</span><span>()
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">struct </span><span>Hoge(String);
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>]
+</span><span style="color:#b48ead;">impl </span><span>Hello </span><span style="color:#b48ead;">for </span><span>Hoge {
+</span><span>    </span><span style="color:#65737e;">// It can handle associated types in impl.
+</span><span>    </span><span style="color:#65737e;">//
+</span><span>    </span><span style="color:#65737e;">// You need to specify them by yourself as if you don&#39;t use `thin_delegate`.
+</span><span>    </span><span style="color:#b48ead;">type </span><span>Return = String;
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// It can handle associated consts in impl.
+</span><span>    </span><span style="color:#65737e;">//
+</span><span>    </span><span style="color:#65737e;">// You need to specify them by yourself as if you don&#39;t use `thin_delegate`.
+</span><span>    </span><span style="color:#b48ead;">const </span><span style="color:#d08770;">NEED_TO_FILL</span><span>: &amp;</span><span style="color:#b48ead;">&#39;static str </span><span>= &quot;</span><span style="color:#a3be8c;">Hoge</span><span>&quot;;
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// It can handle associated functions in impl.
+</span><span>    </span><span style="color:#65737e;">//
+</span><span>    </span><span style="color:#65737e;">// If an impl doesn&#39;t has an associated function (`filled()`), it is filled.
+</span><span>    </span><span style="color:#65737e;">// If an impl has an associated function (`override_()`), it is used.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">override_</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; </span><span style="color:#b48ead;">Self::</span><span>Return {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#d08770;">0.</span><span style="color:#96b5b4;">override_</span><span>().</span><span style="color:#96b5b4;">to_uppercase</span><span>()
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>「associated const/type が与えられている場合にそれを使う」という挙動は portrait のものを継承しています <sup class="footnote-reference"><a href="#306">6</a></sup>.
+thin_delegate はより強く, 「与えなければならない」です.
+(associated const
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.1.0/tests/ui/fail_intended_limitation_associated_const_misning.rs">rs</a>]
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.1.0/tests/ui/fail_intended_limitation_associated_const_misning.stderr">stderr</a>],
+associated type
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.1.0/tests/ui/fail_intended_limitation_associated_type_missing.rs">rs</a>]
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.1.0/tests/ui/fail_intended_limitation_associated_type_missing.stderr">stderr</a>]
+)</p>
+<h4 id="arg-external_trait_def">Argument <code>external_trait_def</code></h4>
+<p>さて, これで生成部分は良さそうです. もうひとつ, 「どうやって外部 crate の trait 定義を取り込むか」という問題があります.</p>
+<ol>
+<li>外部 crate に <code>#[thin_delegate::register]</code> 相当が付いている場合</li>
+<li>付いていない場合</li>
+</ol>
+<p>の対応を考える必要があります.</p>
+<p>ambassador では <strong><code>Trait</code> と同名の decl macro を定義する</strong> ことで 1. に対応し,
+<a href="https://docs.rs/ambassador/latest/ambassador/attr.delegatable_trait_remote.html"><code>ambassador::delegatable_trait_remote</code></a>
+という attribute macro を提供することで 2. に対応しています.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">ambassador</span><span>::</span><span style="color:#bf616a;">delegatable_trait_remote</span><span>]
+</span><span style="color:#b48ead;">trait </span><span>Display {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">fmt</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">f</span><span>: &amp;</span><span style="color:#b48ead;">mut </span><span>std::fmt::Formatter) -&gt; Result&lt;(), std::fmt::Error&gt;;
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">derive</span><span>(ambassador::Delegate)]
+</span><span>#[</span><span style="color:#bf616a;">delegate</span><span>(Display)] </span><span style="color:#65737e;">// &lt;-------- Delegate implementation of Display to struct field
+</span><span style="color:#b48ead;">pub struct </span><span>WrappedCat(Cat);
+</span></code></pre>
+<p>しかし僕はこの設計に以下の理由で同意できません:</p>
+<ul>
+<li>(2.) 上では <code>trait Display</code> は実際には定義されない. <code>#[ambassador::delegatable_trait_remote]</code>
+は「<code>#[derive(ambassador:Delegate)]</code> に定義を伝えるだけ」というのがぱっと見でわからない.</li>
+<li>(1., 2.) <a href="https://docs.rs/ambassador/latest/ambassador/attr.delegate_remote.html"><code>ambassador::delegate_remote</code></a>
+もあり, どう使い分ければいいのかぱっと見でわからない <sup class="footnote-reference"><a href="#307">7</a></sup>.</li>
+<li>(1.) <code>pub</code> な macro をユーザーに暗黙で定義してしまう. 暗黙のうちに crate 側の契約が増える.
+<ul>
+<li>上手く動かないときにユーザーはデバッグ不能 [<a href="https://github.com/hobofan/ambassador/issues/45">issue#45</a>]</li>
+<li>ambassador の version が異なると使えない.</li>
+<li>(1.) <a href="https://docs.rs/ambassador/latest/ambassador/#backwards-compatibility">backward compatibility</a>
+と破壊的変更に気を配る必要がある. 実際上記の issue に対応するために破壊的な変更が起こっており
+[<a href="https://github.com/hobofan/ambassador/pull/60/files">pr#60</a>], 利用している crate はこの破壊的変更を
+その crate 自身の破壊的変更に持ち上げる必要がある.</li>
+</ul>
+</li>
+<li>(1.) upstream crate に <code>register</code> 用の attribute がついていないとき, 2. を使わずに楽をするためには upstream crate に
+PR をマージしてくれとお願いする必要がある. 説得コストが高すぎる. 上述の問題もありメンテナンスコストを増やしてしまうので
+upstream crate 側は reject するのもやむなし.</li>
+<li>(1.) 2. を使わずにコピペなしで全てが動く世界に行くためには delegation 界の覇権を取る必要がある...どころか,
+全ての <code>pub</code> trait に <strong>事前に</strong> 付けておく必要がある. 非現実的である.</li>
+</ul>
+<p>以上の理由から, thin_delegate は 1. を禁止し, 2. に全振りして <strong>コピペしやすくする</strong> ことで解決しています
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.1.0/tests/ui/pass_external_trait_def_with_uses.rs">example</a>]
+.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>mod external {
+</span><span>    pub struct Arg;
+</span><span>
+</span><span>    pub trait Hello {
+</span><span>        fn hello(&amp;self, arg: Arg) -&gt; String;
+</span><span>    }
+</span><span>
+</span><span>    impl Hello for String {
+</span><span>        fn hello(&amp;self, _arg: Arg) -&gt; String {
+</span><span>            format!(&quot;hello, {self}&quot;)
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>// Each `#[thin_delegate::fill_delegate(external_trait_def = __external_trait_def)]` will be
+</span><span>// expanded with uses as:
+</span><span>//
+</span><span>// ```
+</span><span>// mod ... {
+</span><span>//    use super::*;
+</span><span>//
+</span><span>//    use crate::external::Arg;
+</span><span>//
+</span><span>//    impl ...
+</span><span>// }
+</span><span>// ```
+</span><span>//
+</span><span>// It&#39;s convenient to copy&amp;paste original definition as is.
+</span><span>#[thin_delegate::external_trait_def(with_uses = true)]
+</span><span>mod __external_trait_def {
+</span><span>    use crate::external::Arg;
+</span><span>
+</span><span>    #[thin_delegate::register]
+</span><span>    pub trait Hello {
+</span><span>        fn hello(&amp;self, arg: Arg) -&gt; String;
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[thin_delegate::register]
+</span><span>struct Hoge(String);
+</span><span>
+</span><span>#[thin_delegate::fill_delegate(external_trait_def = __external_trait_def)]
+</span><span>impl external::Hello for Hoge {}
+</span></code></pre>
+<p><code>#[thin_delegate::external_trait_def]</code> は <code>mod</code> に付け, その module を外部 crate の trait 定義を貼り付けるためのものとして
+扱います. <code>#[thin_delegate::fill_delegate]</code> 側では <code>external_trait_def</code> にその module の path を指定します.
+<code>#[thin_delegate::external_trait_def]</code> を <code>with_uses = true</code> 付きで使うとその中の <code>use</code> を
+<code>#[thin_delegate::fill_delegate]</code> の展開結果の中でも使われるようにします <sup class="footnote-reference"><a href="#308">8</a></sup>.</p>
+<p>このデザインの利点は以下です:</p>
+<ul>
+<li>(この module 配下には普通の手段でアクセスしようとしないはずなので,) ユーザーはこの trait 定義で実際に
+trait が定義されるのかどうかに気を使わなくてよい. (実際は定義されない.)</li>
+<li><code>register</code>, <code>fill_delegate</code>, <code>external_trait_def</code> が直交している <sup class="footnote-reference"><a href="#309">9</a></sup> のでわかりやすく使いやすい.</li>
+<li>crate を跨ぐケースを考えなくてよい. 特に version 間差異.</li>
+<li>覇権を取る必要も説得する必要もない.</li>
+</ul>
+<p>以上で主要な構文は全てです. では実装の話に移りましょう.</p>
+<h3 id="implementation-of-thin_delegate">thin_delegate の実装</h3>
+<p>基本的に物事というのは答えがわかりさえすればそこに至るのは比較的に楽です <sup class="footnote-reference"><a href="#310">10</a></sup>. あとはやるだけってやつです.</p>
+<p>なので, 頑張る.</p>
+<p>...で済ますのもアレなのでかいつまんで説明しておきます.</p>
+<h4 id="chains-of-macros">proc macro -&gt; decl macro -&gt; proc macro</h4>
+<p>2章で enum_delegate v0.2.0, ambassador, portrait は proc macro 中で decl macro を使って情報伝達していることは見ました.
+thin_delegate は (enum_delegate v0.2.0, portrait と同じく) proc macro -&gt; decl macro -&gt; proc macro
+と処理を繋いでいくことで実現しています. decl macro フェーズで何をやっているかは
+<a href="https://github.com/kenoss/thin_delegate/blob/v0.0.3/src/decl_macro.rs">src/decl_macro.rs</a>
+を見れば全てわかります.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    quote! {
+</span><span>        macro_rules! #feed_trait_def_of {
+</span><span>            {
+</span><span>                @</span><span style="color:#d08770;">KONT </span><span>{ </span><span style="color:#bf616a;">$kont</span><span>:path },
+</span><span>                $(@</span><span style="color:#bf616a;">$arg_key</span><span>:ident { </span><span style="color:#bf616a;">$arg_value</span><span>:tt },)*
+</span><span>            } =&gt; {
+</span><span>                </span><span style="color:#bf616a;">$kont</span><span>! {
+</span><span>                    $(@</span><span style="color:#bf616a;">$arg_key </span><span>{ </span><span style="color:#bf616a;">$arg_value </span><span>},)*
+</span><span>                    @</span><span style="color:#d08770;">TRAIT_DEF </span><span>{ #trait_ },
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>        #[</span><span style="color:#bf616a;">allow</span><span>(unused_imports)]
+</span><span>        </span><span style="color:#b48ead;">pub</span><span>(</span><span style="color:#b48ead;">crate</span><span>) </span><span style="color:#b48ead;">use </span><span>#feed_trait_def_of;
+</span><span>    }
+</span><span>
+</span><span>...
+</span><span>
+</span><span>    quote! {
+</span><span>        macro_rules! #feed_structenum_def_of {
+</span><span>            {
+</span><span>                @</span><span style="color:#d08770;">KONT </span><span>{ </span><span style="color:#bf616a;">$kont</span><span>:path },
+</span><span>                $(@</span><span style="color:#bf616a;">$arg_key</span><span>:ident { </span><span style="color:#bf616a;">$arg_value</span><span>:tt },)*
+</span><span>            } =&gt; {
+</span><span>                </span><span style="color:#bf616a;">$kont</span><span>! {
+</span><span>                    $(@</span><span style="color:#bf616a;">$arg_key </span><span>{ </span><span style="color:#bf616a;">$arg_value </span><span>},)*
+</span><span>                    @</span><span style="color:#d08770;">STRUCTENUM_DEF </span><span>{ #structenum },
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>        #[</span><span style="color:#bf616a;">allow</span><span>(unused_imports)]
+</span><span>        </span><span style="color:#b48ead;">pub</span><span>(</span><span style="color:#b48ead;">crate</span><span>) </span><span style="color:#b48ead;">use </span><span>#feed_structenum_def_of;
+</span><span>    }
+</span><span>
+</span><span>...
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// Collect trait and structenum defs by CPS:
+</span><span>    </span><span style="color:#65737e;">//
+</span><span>    </span><span style="color:#65737e;">//    #feed_trait_def_of!
+</span><span>    </span><span style="color:#65737e;">// -&gt; __thin_delegate__trampoline1!
+</span><span>    </span><span style="color:#65737e;">// -&gt; #feed_structenum_def_of!
+</span><span>    </span><span style="color:#65737e;">// -&gt; __thin_delegate__trampoline2!
+</span><span>    </span><span style="color:#65737e;">// -&gt; #[::thin_delegate::__internal__fill_delegate]
+</span><span>    quote! {
+</span><span>        </span><span style="color:#96b5b4;">macro_rules! </span><span>__thin_delegate__trampoline2 {
+</span><span>            {
+</span><span>                @IMPL {{ </span><span style="color:#bf616a;">$impl</span><span>:item }},
+</span><span>                @</span><span style="color:#d08770;">TRAIT_DEF </span><span>{ </span><span style="color:#bf616a;">$trait_def</span><span>:item },
+</span><span>                @</span><span style="color:#d08770;">STRUCTENUM_DEF </span><span>{ </span><span style="color:#bf616a;">$structenum_def</span><span>:item },
+</span><span>            } =&gt; {
+</span><span>                #[::</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">__internal__fill_delegate</span><span>(#args)]
+</span><span>                </span><span style="color:#b48ead;">mod </span><span>__thin_delegate__change_this_name {
+</span><span>                    </span><span style="color:#bf616a;">$trait_def
+</span><span>
+</span><span>                    </span><span style="color:#bf616a;">$structenum_def
+</span><span>
+</span><span>                    </span><span style="color:#bf616a;">$impl
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>
+</span><span>        </span><span style="color:#96b5b4;">macro_rules! </span><span>__thin_delegate__trampoline1 {
+</span><span>            {
+</span><span>                @IMPL {{ </span><span style="color:#bf616a;">$impl</span><span>:item }},
+</span><span>                @</span><span style="color:#d08770;">TRAIT_DEF </span><span>{ </span><span style="color:#bf616a;">$trait_def</span><span>:item },
+</span><span>            } =&gt; {
+</span><span>                #feed_structenum_def_of! {
+</span><span>                    @</span><span style="color:#d08770;">KONT </span><span>{ __thin_delegate__trampoline2 },
+</span><span>                    @</span><span style="color:#d08770;">IMPL </span><span>{{ </span><span style="color:#bf616a;">$impl </span><span>}},
+</span><span>                    @</span><span style="color:#d08770;">TRAIT_DEF </span><span>{ </span><span style="color:#bf616a;">$trait_def </span><span>},
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>
+</span><span>        #feed_trait_def_of! {
+</span><span>            @</span><span style="color:#d08770;">KONT </span><span>{ __thin_delegate__trampoline1 },
+</span><span>            @</span><span style="color:#d08770;">IMPL </span><span>{{ #impl_ }},
+</span><span>        }
+</span><span>    }
+</span></code></pre>
+<p>trait と struct/enum に対するふたつの <code>#[thin_delegate::register]</code> 呼び出しで
+<code>#feed_trait_def_of!</code> と <code>#feed_structenum_def_of!</code> を定義します.
+(実際にはこれらの macro 名は trait/struct/enum 名依存で決まる.)
+<code>#[thin_delegate::fill_delegate]</code> では最初に <code>#feed_trait_def_of!</code> を呼び出し,
+CPS で情報を集めた上で <code>#[::thin_delegate::__internal__fill_delegate(#args)]</code>
+を呼び出します.</p>
+<p>これ, このどんどん macro 展開を繋げていって処理をする形式, どこかで見たことある人も多いかもしれません.
+僕は「TeX だな〜」と思いました <sup class="footnote-reference"><a href="#311">11</a></sup>.</p>
+<p>この形式によって unit test も簡単になっています. <a href="https://kenoss.github.io/blog/2025-01-04-thin_delegate-3/#test">test</a> で見ます.</p>
+<h4 id="generics-tairt-bound">generics/trait bound</h4>
+<p>thin_delegate は generics/trait bound をサポートしています <sup class="footnote-reference"><a href="#312">12</a></sup>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">pub trait </span><span>Hello&lt;T, const N: usize&gt; {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">hello</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; [T; N];
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>Hello&lt;</span><span style="color:#b48ead;">u8</span><span>, 4&gt; </span><span style="color:#b48ead;">for </span><span>char {
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">hello</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; [</span><span style="color:#b48ead;">u8</span><span>; </span><span style="color:#d08770;">4</span><span>] {
+</span><span>        </span><span style="color:#b48ead;">let mut</span><span> buf = [</span><span style="color:#d08770;">0</span><span>; </span><span style="color:#d08770;">4</span><span>];
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">encode_utf8</span><span>(&amp;</span><span style="color:#b48ead;">mut</span><span> buf);
+</span><span>        buf
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">register</span><span>]
+</span><span style="color:#b48ead;">struct </span><span>Hoge(</span><span style="color:#b48ead;">char</span><span>);
+</span><span>
+</span><span>#[</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">fill_delegate</span><span>]
+</span><span style="color:#b48ead;">impl </span><span>Hello&lt;</span><span style="color:#b48ead;">u8</span><span>, 4&gt; </span><span style="color:#b48ead;">for </span><span>Hoge {}
+</span></code></pre>
+<p>ここで問題となるのは trait 定義の signature <code>fn hello(&amp;self) -&gt; [T; N];</code> と <code>impl Hello&lt;u8, 4&gt; for Hoge {}</code> から
+<code>fn hello(&amp;self) -&gt; [u8; 4]</code> を作る必要があるということです.</p>
+<p>この処理は <a href="https://github.com/kenoss/thin_delegate/blob/v0.0.3/src/generic_param_replacer.rs">src/generics_param_replacer.rs</a>
+にあります. visitor を使って置き換えていくだけです <sup class="footnote-reference"><a href="#313">13</a></sup>.
+(上の例だと <code>{T =&gt; u8}</code>, <code>{N =&gt; 4}</code> という <code>HashMap</code> を使って発見次第代入していく.)</p>
+<p>これもまた <code>impl</code> に付けるという構文を採用した利点のひとつです <sup class="footnote-reference"><a href="#304">4</a></sup>.</p>
+<p>ちなみに super trait は特に意識する必要ありません.
+<a href="https://github.com/kenoss/sabiniwm/blob/ed5d2c9cc199dd3358b33e8ef700e31fc39ea6ed/crates/sabiniwm/src/backend/mod.rs#L34-L55"><code>impl</code> を複数書いてもらうだけ</a>
+です.</p>
+<h4 id="macro-hygiene">macro hygiene</h4>
+<p>おそらく最終段に attribute macro を使った影響だと思うのですが, macro hygiene が問題になりました <sup class="footnote-reference"><a href="#314">14</a></sup>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    quote! {
+</span><span>        </span><span style="color:#96b5b4;">macro_rules! </span><span>__thin_delegate__trampoline2 {
+</span><span>            {
+</span><span>                @IMPL {{ </span><span style="color:#bf616a;">$impl</span><span>:item }},
+</span><span>                @</span><span style="color:#d08770;">TRAIT_DEF </span><span>{ </span><span style="color:#bf616a;">$trait_def</span><span>:item },
+</span><span>                @</span><span style="color:#d08770;">STRUCTENUM_DEF </span><span>{ </span><span style="color:#bf616a;">$structenum_def</span><span>:item },
+</span><span>            } =&gt; {
+</span><span>                #[::</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">__internal__fill_delegate</span><span>(#args)]
+</span><span>                </span><span style="color:#b48ead;">mod </span><span>__thin_delegate__change_this_name {
+</span><span>                    </span><span style="color:#bf616a;">$trait_def
+</span><span>
+</span><span>                    </span><span style="color:#bf616a;">$structenum_def
+</span><span>
+</span><span>                    </span><span style="color:#bf616a;">$impl
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>...
+</span></code></pre>
+<p><code>$trait_def</code> (や <code>$impl</code>) のところには trait method が含まれますが, そこには <code>self</code> というトークンが含まれ得ます.
+(e.g. <code>fn hello(&amp;self) -&gt; [T; N];</code>) このトークン列は <code>#feed_trait_def_of!</code> から来ているので,
+decl macro の (partial) hygiene によってこの <code>self</code> トークンをそのまま利用することはできません
+[<a href="https://veykril.github.io/tlborm/syntax-extensions/hygiene.html">1</a>]
+[<a href="https://veykril.github.io/tlborm/decl-macros/minutiae/hygiene.html">2</a>].
+トークンがどこに由来するかという情報は <code>Span</code> に入っているので
+[<a href="https://veykril.github.io/tlborm/proc-macros/hygiene.html">3</a>],
+全ての sigunature の <code>self</code> を置き換えて proc macro 由来とする
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.0.3/src/self_replacer.rs">src/self_replacer.rs</a>]
+ことでこの問題を解決しています <sup class="footnote-reference"><a href="#315">15</a></sup>.</p>
+<h4 id="attr-macro-external_trait_def">Attribute macro <code>external_trait_def</code></h4>
+<p><code>#[thin_delegate::external_trait_def]</code> と <code>#[thin_delegate::register]</code> は直交していました.
+これを実現するために, 内部的には <code>#[thin_delegate::external_trait_def]</code> 呼び出しでその配下にあるものに
+<code>#[::thin_delegate::__internal__is_external_marker]</code> attribute を付けて回り,
+<code>#[thin_delegate::register]</code> の呼び出し時にその有無で挙動を変更しています.</p>
+<p>実装における大きめの見所はこれで終わりです.</p>
+<h3 id="other-techniques">その他のテクニック</h3>
+<h4 id="test">test</h4>
+<p>個人的に <strong>テストはその挙動がチェックできる最内に書くべき</strong> と思っています. (このへんは別記事で書けるとよいですね.)</p>
+<p>具体例として, thin_delegate では unit test と trybuild によるテストを行っています.</p>
+<ul>
+<li>unit test: macro の展開形のチェックをする.</li>
+<li>trybuild: 実際にコンパイルが通るか, コンパイルエラー,
+<code>#[thin_delegate::__internal__fill_delegate]</code> に至るまでの部分などをチェックする.</li>
+</ul>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    quote! {
+</span><span>        </span><span style="color:#96b5b4;">macro_rules! </span><span>__thin_delegate__trampoline2 {
+</span><span>            {
+</span><span>                @IMPL {{ </span><span style="color:#bf616a;">$impl</span><span>:item }},
+</span><span>                @</span><span style="color:#d08770;">TRAIT_DEF </span><span>{ </span><span style="color:#bf616a;">$trait_def</span><span>:item },
+</span><span>                @</span><span style="color:#d08770;">STRUCTENUM_DEF </span><span>{ </span><span style="color:#bf616a;">$structenum_def</span><span>:item },
+</span><span>            } =&gt; {
+</span><span>                #[::</span><span style="color:#bf616a;">thin_delegate</span><span>::</span><span style="color:#bf616a;">__internal__fill_delegate</span><span>(#args)]
+</span><span>                </span><span style="color:#b48ead;">mod </span><span>__thin_delegate__change_this_name {
+</span><span>                    </span><span style="color:#bf616a;">$trait_def
+</span><span>
+</span><span>                    </span><span style="color:#bf616a;">$structenum_def
+</span><span>
+</span><span>                    </span><span style="color:#bf616a;">$impl
+</span><span>                }
+</span><span>            }
+</span><span>        }
+</span><span>...
+</span></code></pre>
+<p>最終段は <code>#[thin_delegate::__internal__fill_delegate]</code> でハンドリングしているのでした.
+ということはこの attribute macro の入出力を unit test すればどう展開されるのかのチェックが可能です.</p>
+<p>一方, 実際にコンパイルが通るかなどはこの unit test ではチェックできません. (e.g. macro hygiene of <code>self</code>)
+なのでここは trybuild でテストしています. 逆に trybuild では展開形のチェックはできません.</p>
+<p>エラーは執拗にテストをすることでのみ改善できます. テストを書くんだ.
+<a href="https://qiita.com/legokichi/items/4e85ec1e74f4e754fb94#ci-%E3%81%A7-cargo-clippy---tests---examples-----dclippyall-%E3%81%97%E3%82%8D">パラノイアになれ</a>
+<sup class="footnote-reference"><a href="#316">16</a></sup></p>
+<h4 id="trivial-coding">trivial coding</h4>
+<p>個人的に <strong>プログラムの 97% は trivial であるべき</strong> と思っています. (これもは別記事ry)</p>
+<p>人間の脳が最も貴重なリソースだ. それを無駄にするのは可能な限り避けなければいけない.
+何より僕が読めない.</p>
+<p>というわけで全編において僕が読める様に書いています <sup class="footnote-reference"><a href="#317">17</a></sup>.
+一例でしかないけど,
+<a href="https://github.com/SOF3/portrait/blob/master/codegen/src/derive.rs#L62-L113"><code>portrait::delegate</code> の引数の parse</a>
+と
+<code>thin_delegate::fill_delegate</code> の引数の parse
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.0.3/src/fill_delegate_args.rs#L149-L186">1</a>]
+[<a href="https://github.com/kenoss/thin_delegate/blob/v0.0.3/src/fill_delegate_args.rs#L125-L147">2</a>]
+を比較してみるとよいかもしれない <sup class="footnote-reference"><a href="#318">18</a></sup>.</p>
+<p>この記事を書いているのも自明にするための活動のひとつです.</p>
+<h3 id="summary">3章まとめ</h3>
+<p>この章では thin_delegate の設計と実装を説明しました.
+<a href="../2025-01-05-thin_delegate-4">4章</a> ではまとめを行ないます.</p>
+<div class="footnote-definition" id="301"><sup class="footnote-definition-label">1</sup>
+<p>包丁には「よく切れます」「危険なので取り扱い注意」「人に向けてはいけません」などが書かれているでしょう.</p>
+</div>
+<div class="footnote-definition" id="302"><sup class="footnote-definition-label">2</sup>
+<p>何故か? これは推測でしかありませんが, 考えられるのは 1. derive macro <code>#[derive(ambassador::Delegate)]</code>
+を struct/enum に付けることに固執した. 2. 2章で解説した様に <code>#[derive(ambassador::Delegate)]</code>
+は内部で decl macro のみでコードを生成しており, thin_delegate の様に proc macro を使ったり decl macro
+を多段にするのを嫌った, あたりでしょうか. (知らんけど)</p>
+</div>
+<div class="footnote-definition" id="303"><sup class="footnote-definition-label">3</sup>
+<p>実はそれ以上に, trait <code>Trait</code> が実在しないのに <code>#[derive(Trait)]</code> と書けるようにするのは慎重になるべきと
+僕は思っています. <code>derive_more::From</code>, <code>derive_builder::Builder</code>, <code>thiserror::Erorr</code>
+くらいまでなら許容かな. <code>ambassador::Delegate</code> や <code>auto_delegate::Delegate</code> はやりすぎだと思います.
+<code>thiserror::Erorr</code> が許せてこれらが許せないのはなんでだろう...?</p>
+</div>
+<div class="footnote-definition" id="304"><sup class="footnote-definition-label">4</sup>
+<p>「一箇所直せば全てが直る」</p>
+</div>
+<div class="footnote-definition" id="305"><sup class="footnote-definition-label">5</sup>
+<p>無理やりやろうとすると ambiguity が出てきてしまいます
+[<a href="https://github.com/kenoss/kenoss.github.io/content/blog/2025-01-01-thin_delegate_aux/tests/ui/portrait/pass_limitation_default_impl_ambiguity.rs">example</a>].</p>
+</div>
+<div class="footnote-definition" id="306"><sup class="footnote-definition-label">6</sup>
+<p>実は設計段階で portrait を参考にしたわけではなく <code>impl</code> に付けるのと <code>delegate</code> crate 並の柔軟性を持たせようとしたら
+再発見したというやつなのですが, 説明が楽なのでそういうことにしてください.</p>
+</div>
+<div class="footnote-definition" id="307"><sup class="footnote-definition-label">7</sup>
+<p>流石にこれはちゃんとドキュメントを見ればいいのでは? はい...</p>
+</div>
+<div class="footnote-definition" id="308"><sup class="footnote-definition-label">8</sup>
+<p>いちゃもんつけポイント. この挙動は「ユーザーが展開系を想像できるくらいシンプル」でしょうか?
+いやでもこれないと面倒なんだよぉ〜〜〜
+[<a href="https://github.com/kenoss/sabiniwm/commit/41c0222">sabiniwm 41c0222</a>]</p>
+</div>
+<div class="footnote-definition" id="309"><sup class="footnote-definition-label">9</sup>
+<p>(許容できる追加コストで) 直交にできるときは直交にした方が良い. 古事記にもそう書いてある.</p>
+</div>
+<div class="footnote-definition" id="310"><sup class="footnote-definition-label">10</sup>
+<p>数学とか NP とか.</p>
+</div>
+<div class="footnote-definition" id="311"><sup class="footnote-definition-label">11</sup>
+<p>TeX にはレジスタもありますが, (先頭) 完全展開可能であることが重要なケースがあります.
+そういうケースではこの様に CPS で処理することがよくあります.
+[<a href="https://zrbabbler.hatenablog.com/entry/20130526/1369591778">1</a>]
+[<a href="https://zrbabbler.hatenablog.com/entry/20120128/1327735636">2</a>]
+[<a href="https://zrbabbler.hatenablog.com/entry/20150606/1433549572">3</a>]
+[<a href="https://blog.wtsnjp.com/2018/04/28/expl3-for-tex-users/">4</a>]
+(TeX 詳しくないからしらんけど)</p>
+</div>
+<div class="footnote-definition" id="312"><sup class="footnote-definition-label">12</sup>
+<p>全部サポートできていると思うのですが, 穴を見つけた方は issue で教えてください.</p>
+</div>
+<div class="footnote-definition" id="313"><sup class="footnote-definition-label">13</sup>
+<p>最終段に proc macro を使っていない ambassador や <code>impl</code> に付けない enum_delegate はともかく,
+処理方法も構文も似ている portrait が何故これをやっていないのかは謎です.</p>
+</div>
+<div class="footnote-definition" id="314"><sup class="footnote-definition-label">14</sup>
+<p>わりとデバッグが面倒だった覚えがあります. unit test でも <code>cargo expand</code> でも問題ない様に見えるので.</p>
+</div>
+<div class="footnote-definition" id="315"><sup class="footnote-definition-label">15</sup>
+<p>こうやって hygiene を回避するのは, まぁこのケースなら問題ないでしょう.</p>
+</div>
+<div class="footnote-definition" id="316"><sup class="footnote-definition-label">16</sup>
+<p>まぁしかし全ての分岐に対してテストを書いたりするのは現実的ではありません.
+代表的なものだけテストするなどでバランスを保っています.
+穴があっても OSS なので文句がある人が issue/PR で教えてくれるでしょう.</p>
+</div>
+<div class="footnote-definition" id="317"><sup class="footnote-definition-label">17</sup>
+<p>「自分が読めるか」と「trivial か」というのには天と地ほどの差があるわけですが,
+しかし他に自分で完結する判定方法がない...</p>
+</div>
+<div class="footnote-definition" id="318"><sup class="footnote-definition-label">18</sup>
+<p>この <code>eq_token</code> などまで parse するのは <code>syn</code> を真似ている.
+この無駄を消すのとプログラムを読みやすく保つのとどちらが大切か?
+この proc macro の展開なんてコンパイル中で数回しか起きないのだ.</p>
+</div>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

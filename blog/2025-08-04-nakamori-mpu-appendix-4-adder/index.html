@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>
+中森 MPU 行間埋め Appendix IV 前半 加算器 | 冷たき沢の岩陰の
+</title>
+
+        
+<meta property="og:image" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;ogp.jpg" />
+<meta property="og:title" content="中森 MPU 行間埋め Appendix IV 前半 加算器" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https:&#x2F;&#x2F;kenoss.github.io&#x2F;blog&#x2F;2025-08-04-nakamori-mpu-appendix-4-adder&#x2F;" />
+
+<meta property="og:site_name" content="冷たき沢の岩陰の" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:site" content="@keno_ss" />
+
+
+        
+
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
+      integrity="sha384-5TcZemv2l/9On385z///+d7MSYlvIEw9FuZTIdZ14vJLqWphw7e7ZPuOiCHJcFCP"
+      crossorigin="anonymous">
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"
+        integrity="sha384-cMkvdD8LoxVzGF/RPUKAcvmm49FQ0oxwDF3BGKtDXcEc+T1b2N+teh/OJfpU0jr6"
+        crossorigin="anonymous"></script>
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"
+        integrity="sha384-hCXGrW6PitJEwbkoStFjeJxv+fSOOQKOPbJxSfM6G5sWZjAyWhXiTIIAmQqnlLlh"
+        crossorigin="anonymous"></script>
+<script>
+   document.addEventListener("DOMContentLoaded", function() {
+     renderMathInElement(document.body, {
+       delimiters: [
+         {left: '$$', right: '$$', display: true},
+         {left: '$', right: '$', display: false},
+         {left: '\\[', right: '\\]', display: true},
+         {left: '\\(', right: '\\)', display: false}
+       ],
+       throwOnError : false
+     });
+   });
+</script>
+
+
+
+        <link rel="stylesheet" href="https://kenoss.github.io/theme.css">
+    </head>
+    <body>
+        <div class="content">
+            <header>
+                <div class="header-left">
+                    <a href="https:&#x2F;&#x2F;kenoss.github.io" class="header-logo">冷たき沢の岩陰の</a>
+                </div>
+                <div class="header-right">
+                </div>
+            </header>
+            <main>
+                
+<article itemscope itemtype="http://schema.org/BlogPosting">
+    <div class="headline" itemprop="headline">
+        <h1 class="post-title">中森 MPU 行間埋め Appendix IV 前半 加算器</h2>
+        <div class="border"></div>
+        <div>
+            <time datetime="2025-08-04" class="post-date" itemprop="datePublished">
+                2025-08-04
+            </time>
+            
+                |
+                
+                    <span class="post-tag">🦀 tech</span>
+                
+                    <span class="post-tag">🦀 中森 MPU</span>
+                
+                        
+        </div>
+    </div>
+    <div itemprop="articleBody">
+        <p>$$
+\gdef\defeq{\mathrel{\mathop:}=}
+$$</p>
+<h2 id="motibesiyon">モチベーション</h2>
+<p>[<a href="https://shop.cqpub.co.jp/hanbai/books/45/45561.html">中森 MPU</a>] は面白いのだが行間がそこそこある. なので埋める.</p>
+<h2 id="disclaimer">Disclaimer</h2>
+<p>論理合成とか信号処理とか全然わからない. 自分が納得できるまで調べた結果をまとめているだけである.</p>
+<h2 id="wen-ti-she-ding">問題設定</h2>
+<p>Q1.
+n bit の整数ふたつ $x, y$ を加算することを考える: $s = x + y \mod 2^n$. 更に (n-1 bit 目の) carry $c_{n-1}$ も合わせて取得したい.</p>
+<p>適切に問題設定してやれば unsigned のときのみを考えればよい. (本書参照.)</p>
+<p>色々便利なので Lisp 的な疑似コードを用いる.</p>
+<h2 id="full-adder">Full adder</h2>
+<p>n = 1 のとき.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>s = (xor x y)
+</span><span>c_0 = (and x y)
+</span></code></pre>
+<p>とすればよい. これを <strong>Half Adder</strong> と呼ぶ.</p>
+<p>しかしこれでは話が進まない. よって問題を更新する:</p>
+<p>Q2.
+n bit の整数ふたつ $x, y$ と 0 bit 目の carry $c_{-1}$ を加算することを考える: $s = x + y + c_{-1} \mod 2^n$.
+更に (n-1 bit 目の) carry $c_{n-1}$ も合わせて取得したい.</p>
+<p>これも同様で, 以下の様にすればよい:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>s = (xor (xor x y) c_{-1})
+</span><span>c_0 = (and (or x y) c_{-1})
+</span></code></pre>
+<p>($c_0$ の妥当性は真偽値表を書けばよい.) これを <strong>Full Adder</strong> と呼ぶ.</p>
+<p>Oversimplify して, 回路遅延はゲートに依らず $d$ であり通過したゲートの個数のみで決まり, 配線長の問題なども考えないとする.</p>
+<p>上記で $s$ も $c_0$ も2段の回路なので遅延は $2d$ である. 以降では $d$ で除して $d = 1$ として考える.</p>
+<h2 id="ripple-carry-adder-rca">Ripple Carry Adder (RCA)</h2>
+<p>i bit 目の入力 $x$, $y$, sum および carry をそれぞれ $x_i$, $y_i$, $s_i$, $c_i$ と書く.</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>s_i = (xor (xor x_i y_i) c_{i-1})
+</span><span>c_i = (and (or x_i y_i) c_{i-1})
+</span></code></pre>
+<p>とすればよい. これを <strong>Ripple Carry Adder (RCA)</strong> と呼ぶ.</p>
+<p>さて, よく見るとこれは Full Adder を連結したものになっている. これを一般化しておく.</p>
+<p>w bit の Q2 を解く加算器 Hoge があったとき, それを b 個接続することにより $n = bw$ bit の加算器が作れる. これを (n, b, w) Block Hoge と呼ぶことにする. (非標準的用語)</p>
+<p>RCA は (n, n, 1) Block Full Adder である.</p>
+<p>回路遅延: $s_i, c_i$ は $c_{i-1}$ に依存する. よって遅延は $2n$ である.</p>
+<h2 id="carry-look-ahead-cla-to-block-carry-look-ahead-bcla">Carry Look Ahead (CLA) と Block Carry Look Ahead (BCLA)</h2>
+<p>この遅延を小さくしたい. (w, 1, w) で適当に良い性質のものが作れると良さそうである. w が小さいとき ($w \le 4$ とか) に良いものがあり, <strong>Carry Look Ahead (CLA)</strong> と呼ぶ.
+後にこれを使って <strong>(bw, b, w) Block CLA</strong> を作る.</p>
+<p>こう置く:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>g_i = (and x_i y_i)
+</span><span>p_i = (xor x_i y_i)
+</span></code></pre>
+<p>すると</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>s_i = (xor p_i c_{i-1})
+</span><span>c_i = (or g_i (and p_i c_{i-1}))
+</span></code></pre>
+<p>である. $c_i$ の方だけ Boole 代数で見て展開すると,</p>
+<p>$$
+\begin{align*}
+c_i
+&amp;= g_i + p_i c_{i-1} \\
+&amp;= g_i + p_i (g_{i-1} + p_{i-1} c_{i-2}) \\
+&amp;= ... \\
+&amp;= g_i + p_i g_{i-1} + p_i p_{i-1} g_{i-2} + ... + p_i ... p_0 c_{-1}
+\end{align*}
+$$</p>
+<p>さて, これを計算するにはどう2項演算をしていくかでバリエーションがある. ひとつめの式で計算するのが RCA であった.</p>
+<p>$$
+\begin{align*}
+g_i^\ast &amp;\defeq g_i + p_i g_{i-1} + p_i p_{i-1} g_{i-2} + ... + p_i p_{i-1} ... p_0 g_0 \\
+p_i^\ast &amp;\defeq p_i ... p_0
+\end{align*}
+$$</p>
+<p>と置けば,</p>
+<p>$$
+c_i = g_i^\ast + p_i^\ast c_{-1}
+$$</p>
+<p>である. $g_i^\ast$ には最大 i+1 項の積, i+1 項の和があるので (共通化とか配線とか考えずに) テキトーにやると $2 \log_2(i+1)$ 段くらいでできる. 例えば $g_3^\ast$ は</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>  g_3^\ast
+</span><span>= g_3 + p_3 g_2 + p_3 p_2 g_1 + p_3 p_2 p_1 g_0
+</span><span>= (or (or g_3
+</span><span>          (and p_3 g_2))
+</span><span>      (or (and p_3
+</span><span>               (and p_2 g_1))
+</span><span>          (and (and p_3 p_2)
+</span><span>               (and p_1 g_0))))
+</span></code></pre>
+<p>よって w bit でこの加算器を作れば $c$ の回路遅延は $2 \log_2(w) + 2$ である. ($s$ も似たようなもの.)</p>
+<p>これを使って (bw, b, w) の加算器を作ろう.</p>
+<p>さて, 上記の $c_i$ では $g_i^\ast$ も $p_i^\ast$ も $c_i$ を含まず, $g_i^\ast$ と $p_i^\ast$ の計算が主要であった. すなわち</p>
+<ul>
+<li>全 block で $g_i^\ast$ / $p_i^\ast$ は同時に計算できる. (最初の block の出力のみを block する.)</li>
+<li>propagation には 1 block あたり $2$ しかかからない.</li>
+</ul>
+<p>従って遅延は $2 \log_2(w) + 2b$ である. これを <strong>(bw, b, w) Block CLA</strong> と呼ぶ.</p>
+<p>(おそらく本書では (n, 1, n) Block CLA のことを CLA と呼んでいる気がする?
+<a href="https://en.wikipedia.org/wiki/Carry-lookahead_adder">Wikipedia</a> とかは CLA = Block CLA な気がする.)</p>
+<p>$w = 4$ として RCA と比較すると ($n = bw = 4b$), RCA が $2n$, (n, n/4, 4) BCLA が $4 + n/2$ である.
+つまり BCLA は定数倍を改善している.
+(n が大きいときに (n, 1, n) で取れれば $O(\log(n))$ だが, 物理的な限界がある. ChatGPT によると $w = 4$ くらいが実用的な限界のようだ.
+一応研究としては $w = 16$ とかもあるらしい
+[<a href="https://www.researchgate.net/publication/343982099_Design_and_Implementation_of_a_16_Bit_Carry-_Lookahead_Adder">Design and Implementation of a 16 Bit Carry- Lookahead Adder</a>].)</p>
+<h2 id="fan-in">fan-in</h2>
+<p>上記の $g_3^\ast$ では or と and は2項演算のみを用いた. 実際は and4 など 3〜4 入力くらいならひとつの CMOS ゲートとして作れるらしい. (詳細略.)</p>
+<h2 id="parallel-prefix-adder">Parallel Prefix Adder</h2>
+<p>さて, 上記の計算では共通項のことを何も考えなかった. 共通項をいい感じに計算するのが <strong>Parallel Prefix Adder</strong> である.
+これは本書でわかりやすく解説してあるのでここでは扱わない.</p>
+
+    </div>
+</article>
+
+            </main>
+            <footer>
+                <div class="footer">
+                    <small class="footer-left">
+                        © 2021--2024. All rights reserved.
+                    </small>
+                    <small class="footer-right">
+                        Powered by <a href="https://www.getzola.org">Zola</a>
+                    </small>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>
